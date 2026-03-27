@@ -116,7 +116,7 @@ doppler secrets set \
 # Newsletter Robot IMAP config
 doppler secrets set \
   NEWSLETTER_EMAIL_BACKEND="imap" \
-  NEWSLETTER_IMAP_EMAIL="myrobot@gmail.com" \
+  NEWSLETTER_IMAP_EMAIL="your-newsletters@gmail.com" \
   NEWSLETTER_IMAP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
 
 # Upload from existing .env

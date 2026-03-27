@@ -16,7 +16,7 @@ The Newsletter Robot now supports two backends for receiving newsletter emails:
 NEWSLETTER_EMAIL_BACKEND=imap  # or "composio"
 
 # IMAP credentials (when using IMAP backend)
-NEWSLETTER_IMAP_EMAIL=myrobot.newsletters@gmail.com
+NEWSLETTER_IMAP_EMAIL=your-newsletters@gmail.com
 NEWSLETTER_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx  # Gmail App Password
 NEWSLETTER_IMAP_HOST=imap.gmail.com
 NEWSLETTER_IMAP_FOLDER=Newsletters
@@ -25,7 +25,7 @@ NEWSLETTER_IMAP_ARCHIVE=CONTENTFLOWZ_DONE
 
 ### 2. Gmail Setup (One-time)
 
-1. **Create dedicated Gmail account**: `myrobot.newsletters@gmail.com`
+1. **Create dedicated Gmail account**: `your-newsletters@gmail.com`
 
 2. **Enable 2-Factor Authentication**:
    - Google Account → Security → 2-Step Verification → Enable
@@ -146,7 +146,7 @@ For programmatic access outside CrewAI:
 from agents.newsletter.tools.imap_tools import IMAPNewsletterReader
 
 reader = IMAPNewsletterReader(
-    email="myrobot@gmail.com",
+    email="your-newsletters@gmail.com",
     app_password="xxxx-xxxx-xxxx-xxxx"
 )
 
