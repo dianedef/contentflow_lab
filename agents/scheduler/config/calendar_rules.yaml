@@ -1,0 +1,103 @@
+# Calendar Publishing Rules Configuration
+# Controls when and how content is scheduled for publishing
+
+# Peak publishing times configuration
+publishing_rules:
+  # Weekday publishing slots (best engagement times)
+  - name: "Peak Weekday Hours"
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday"]
+    times: ["09:00", "14:00", "18:00"]  # 9 AM, 2 PM, 6 PM
+    timezone: "America/New_York"
+    reason: "Maximum audience engagement during work hours and evening"
+
+  # Weekend publishing (lighter schedule)
+  - name: "Weekend Light Publishing"
+    days: ["Saturday", "Sunday"]
+    times: ["10:00"]  # 10 AM only
+    timezone: "America/New_York"
+    reason: "Lower engagement on weekends, one strategic post"
+
+  # Friday special slot
+  - name: "Friday Newsletter Slot"
+    days: ["Friday"]
+    times: ["09:00"]  # Morning newsletters
+    timezone: "America/New_York"
+    reason: "End of week newsletter tradition"
+
+# Blackout dates (no publishing)
+blackout_dates:
+  - date: "2026-01-01"
+    reason: "New Year's Day"
+  - date: "2026-07-04"
+    reason: "Independence Day"
+  - date: "2026-12-25"
+    reason: "Christmas Day"
+  - date: "2026-11-27"
+    reason: "Thanksgiving"
+
+# Content-specific rules
+content_rules:
+  # Newsletter publishing
+  - type: "newsletter"
+    frequency: "weekly"
+    preferred_day: "Friday"
+    preferred_time: "09:00"
+    minimum_spacing_hours: 168  # 1 week
+
+  # SEO content publishing
+  - type: "seo-content"
+    frequency: "3x/week"
+    preferred_days: ["Monday", "Wednesday", "Friday"]
+    preferred_times: ["09:00", "14:00"]
+    minimum_spacing_hours: 48  # 2 days
+
+  # Article publishing
+  - type: "article"
+    frequency: "2x/week"
+    preferred_days: ["Tuesday", "Thursday"]
+    preferred_times: ["14:00"]
+    minimum_spacing_hours: 72  # 3 days
+
+  # Manual urgent content
+  - type: "manual"
+    priority: "high"
+    immediate_publish: true
+    override_rules: true
+
+# General scheduling settings
+scheduling_settings:
+  # Minimum hours between any two publishes (prevent clustering)
+  global_minimum_spacing_hours: 4
+
+  # Maximum items in queue before warning
+  queue_warning_threshold: 20
+
+  # Maximum days content can stay in queue
+  max_queue_days: 14
+
+  # Auto-schedule new content (vs manual scheduling)
+  auto_schedule_enabled: true
+
+  # Timezone for all operations
+  default_timezone: "America/New_York"
+
+  # Retry failed publishes
+  retry_failed_publishes: true
+  max_retry_attempts: 3
+
+# Optimal time scoring weights
+time_scoring:
+  historical_performance: 0.4    # 40% weight on past performance
+  audience_timezone: 0.3         # 30% weight on audience location
+  content_type_preference: 0.2   # 20% weight on content type best practices
+  current_queue_density: 0.1     # 10% weight on avoiding conflicts
+
+# Analytics and reporting
+analytics:
+  # Track engagement metrics for published content
+  track_engagement: true
+  engagement_window_hours: 48  # Track for 48 hours post-publish
+
+  # Learn from historical data
+  adaptive_scheduling: true
+  learning_window_days: 90  # Use last 90 days for learning

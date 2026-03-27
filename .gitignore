@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.virtualenv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Data and output directories
+data/repos/
+data/images/
+data/mem0/
+output/
+*.db
+*.sqlite
+*.sqlite3
+
+# dotenv environment variables file
+.env
+.env.test
+.env.local
+.env.production
+
+# API keys and secrets (extra safety)
+.env*
+!.env.example
+secrets/
+credentials/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Flox
+.flox/cache/
+.flox/run/
+
+# Claude / AI editors
+.claude/
+.aider*
+.cursor/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Large binary files
+*.whl
+
+# Doppler
+.doppler/
+
+# ShipFlow injected dev tools
+shipflow-*.js
+**/shipflow-*.js
