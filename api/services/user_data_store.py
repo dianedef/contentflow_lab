@@ -541,5 +541,78 @@ class UserDataStore:
         )
         return True
 
+    # ─── Activity Log ──────────────────────────────────────────
+
+    async def ensure_activity_table(self) -> None:
+        self._ensure_connected()
+        await self.db_client.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ActivityLog (
+                id TEXT PRIMARY KEY NOT NULL,
+                userId TEXT NOT NULL,
+                projectId TEXT,
+                action TEXT NOT NULL,
+                robotId TEXT,
+                status TEXT NOT NULL DEFAULT 'started',
+                details TEXT,
+                createdAt INTEGER NOT NULL
+            )
+            """
+        )
+
+    def _activity_from_row(self, row: tuple[Any, ...]) -> dict[str, Any]:
+        return {
+            "id": row[0],
+            "userId": row[1],
+            "projectId": row[2],
+            "action": row[3],
+            "robotId": row[4],
+            "status": row[5] or "started",
+            "details": _json_load(row[6], None),
+            "createdAt": _ts(row[7]),
+        }
+
+    async def list_activity(self, user_id: str, project_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        self._ensure_connected()
+        query = """
+            SELECT id, userId, projectId, action, robotId, status, details, createdAt
+            FROM ActivityLog
+            WHERE userId = ?
+        """
+        params: list[Any] = [user_id]
+        if project_id is not None:
+            query += " AND projectId = ?"
+            params.append(project_id)
+        query += " ORDER BY createdAt DESC LIMIT ?"
+        params.append(limit)
+        rs = await self.db_client.execute(query, params)
+        return [self._activity_from_row(row) for row in rs.rows]
+
+    async def create_activity(self, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_connected()
+        now = int(datetime.now().timestamp())
+        activity_id = str(uuid.uuid4())
+        await self.db_client.execute(
+            """
+            INSERT INTO ActivityLog (id, userId, projectId, action, robotId, status, details, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                activity_id,
+                user_id,
+                payload.get("projectId"),
+                payload["action"],
+                payload.get("robotId"),
+                payload.get("status") or "started",
+                _json_dump(payload.get("details")),
+                now,
+            ],
+        )
+        rs = await self.db_client.execute(
+            "SELECT id, userId, projectId, action, robotId, status, details, createdAt FROM ActivityLog WHERE id = ?",
+            [activity_id],
+        )
+        return self._activity_from_row(rs.rows[0])
+
 
 user_data_store = UserDataStore()
