@@ -216,3 +216,19 @@ def init_db(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+    _run_migrations(conn)
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Add columns that didn't exist in the original schema (idempotent)."""
+    for stmt in [
+        "ALTER TABLE idea_pool ADD COLUMN user_id TEXT",
+        "ALTER TABLE content_records ADD COLUMN user_id TEXT",
+    ]:
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ideas_user ON idea_pool(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_content_user ON content_records(user_id)")
+    conn.commit()

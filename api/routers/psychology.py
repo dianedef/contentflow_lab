@@ -5,7 +5,8 @@ and content angle generation. Uses background tasks for long-running
 agent operations with polling-based status retrieval.
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from api.dependencies.auth import CurrentUser, require_current_user
 from api.models.psychology import (
     NarrativeSynthesisRequest,
     NarrativeSynthesisResult,
@@ -249,6 +250,27 @@ def _run_pipeline_task(
             svc.save_content_body(content_record_id, body, edited_by=f"{fmt}_pipeline")
         svc.transition(content_record_id, "pending_review", f"{fmt}_pipeline")
 
+        # Post-generation: mark source ideas as 'used'
+        source_idea_ids = request.angle_data.get("source_idea_ids", [])
+        for idea_id in source_idea_ids:
+            try:
+                svc.update_idea(idea_id, status="used")
+            except Exception:
+                pass
+
+        # Memory integration: record generation for semantic dedup
+        try:
+            from memory.memory_service import MemoryService
+            mem = MemoryService()
+            mem.store_generation(
+                content_type=fmt,
+                title=request.angle_data.get("title", ""),
+                topics=request.angle_data.get("topics", []),
+                summary=body[:200] if body else "",
+            )
+        except Exception:
+            pass  # Memory service is optional
+
         _set_task(task_id, "completed", {
             "content_record_id": content_record_id,
             "format": fmt,
@@ -271,11 +293,13 @@ def _run_pipeline_task(
 async def dispatch_pipeline(
     request: PipelineDispatchRequest,
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_current_user),
 ):
     """Dispatch an angle to a content generation pipeline (async).
 
     Replaces the deprecated render-extract endpoint with real content generation.
-    Creates a ContentRecord and launches the appropriate pipeline in the background.
+    Checks for duplicate content before creating. Creates a ContentRecord and
+    launches the appropriate pipeline in the background.
     """
     fmt = request.target_format
     if fmt not in _FORMAT_MAP:
@@ -286,21 +310,44 @@ async def dispatch_pipeline(
 
     content_type, source_robot = _FORMAT_MAP[fmt]
     task_id = str(uuid.uuid4())
+    title = request.angle_data.get("title", f"Untitled {fmt}")
+
+    # Pre-generation dedup check
+    from utils.dedup import check_content_duplicate
+    duplicate = check_content_duplicate(
+        title=title,
+        user_id=current_user.user_id,
+        project_id=request.project_id,
+    )
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"Similar content already exists: '{duplicate['title']}' (status: {duplicate['status']})",
+                "existing_content_id": duplicate["id"],
+                "existing_title": duplicate["title"],
+            },
+        )
 
     # Create content record
     try:
         from status import get_status_service
         svc = get_status_service()
         record = svc.create_content(
-            title=request.angle_data.get("title", f"Untitled {fmt}"),
+            title=title,
             content_type=content_type,
             source_robot=source_robot,
             status="in_progress",
             project_id=request.project_id,
+            user_id=current_user.user_id,
             tags=[fmt],
             metadata={
                 "angle": request.angle_data,
                 "pipeline_task_id": task_id,
+                "seo_keyword": request.seo_keyword,
+                "seo_signals": request.angle_data.get("seo_signals"),
+                "source_idea_ids": request.angle_data.get("source_idea_ids", []),
+                "source_idea_source": request.angle_data.get("source"),
             },
         )
         content_record_id = record.id

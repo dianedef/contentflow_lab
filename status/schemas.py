@@ -104,6 +104,7 @@ class ContentRecord(BaseModel):
         description="Current lifecycle status",
     )
     project_id: Optional[str] = Field(None, description="Associated project ID")
+    user_id: Optional[str] = Field(None, description="Owner user ID from Clerk auth")
     content_path: Optional[str] = Field(None, description="File system path to content")
     content_preview: Optional[str] = Field(None, description="Short preview of the content (first ~500 chars)")
     content_hash: Optional[str] = Field(None, description="SHA-256 hash of content for deduplication")

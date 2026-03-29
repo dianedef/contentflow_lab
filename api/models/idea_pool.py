@@ -11,6 +11,7 @@ class IdeaSource(str, Enum):
     SEO_KEYWORDS = "seo_keywords"
     WEEKLY_RITUAL = "weekly_ritual"
     COMPETITOR_WATCH = "competitor_watch"
+    SOCIAL_LISTENING = "social_listening"
     MANUAL = "manual"
 
 
@@ -32,6 +33,7 @@ class IdeaRecord(BaseModel):
     priority_score: Optional[float] = None
     status: str = "raw"
     project_id: Optional[str] = None
+    user_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

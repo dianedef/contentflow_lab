@@ -49,6 +49,7 @@ class ContentResponse(BaseModel):
     source_robot: str
     status: str
     project_id: Optional[str]
+    user_id: Optional[str] = None
     content_path: Optional[str]
     content_preview: Optional[str]
     content_hash: Optional[str]

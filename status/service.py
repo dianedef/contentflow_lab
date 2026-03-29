@@ -51,6 +51,7 @@ class StatusService:
         source_robot: str,
         status: str = ContentLifecycleStatus.TODO,
         project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         content_path: Optional[str] = None,
         content_preview: Optional[str] = None,
         content_hash: Optional[str] = None,
@@ -76,6 +77,7 @@ class StatusService:
             source_robot=source_robot,
             status=status,
             project_id=project_id,
+            user_id=user_id,
             content_path=content_path,
             content_preview=content_preview,
             content_hash=content_hash,
@@ -90,10 +92,10 @@ class StatusService:
         self._conn.execute(
             """
             INSERT INTO content_records
-            (id, title, content_type, source_robot, status, project_id,
+            (id, title, content_type, source_robot, status, project_id, user_id,
              content_path, content_preview, content_hash, priority, tags,
              metadata, target_url, current_version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -102,6 +104,7 @@ class StatusService:
                 record.source_robot,
                 record.status,
                 record.project_id,
+                record.user_id,
                 record.content_path,
                 record.content_preview,
                 record.content_hash,
@@ -702,6 +705,11 @@ class StatusService:
         except (IndexError, KeyError):
             current_version = 0
 
+        try:
+            user_id = row["user_id"]
+        except (IndexError, KeyError):
+            user_id = None
+
         return ContentRecord(
             id=row["id"],
             title=row["title"],
@@ -709,6 +717,7 @@ class StatusService:
             source_robot=row["source_robot"],
             status=row["status"],
             project_id=row["project_id"],
+            user_id=user_id,
             content_path=row["content_path"],
             content_preview=row["content_preview"],
             content_hash=row["content_hash"],
@@ -739,6 +748,7 @@ class StatusService:
         tags: Optional[List[str]] = None,
         priority_score: Optional[float] = None,
         project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new idea in the pool."""
         now = datetime.utcnow().isoformat()
@@ -747,8 +757,8 @@ class StatusService:
         self._conn.execute(
             """INSERT INTO idea_pool
                (id, source, title, raw_data, seo_signals, trending_signals,
-                tags, priority_score, status, project_id, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'raw', ?, ?, ?)""",
+                tags, priority_score, status, project_id, user_id, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'raw', ?, ?, ?, ?)""",
             (
                 idea_id,
                 source,
@@ -759,6 +769,7 @@ class StatusService:
                 json.dumps(tags or []),
                 priority_score,
                 project_id,
+                user_id,
                 now,
                 now,
             ),
@@ -781,6 +792,7 @@ class StatusService:
         status: Optional[str] = None,
         min_score: Optional[float] = None,
         project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[List[Dict[str, Any]], int]:
@@ -800,6 +812,9 @@ class StatusService:
         if project_id:
             conditions.append("project_id = ?")
             params.append(project_id)
+        if user_id:
+            conditions.append("user_id = ?")
+            params.append(user_id)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -905,9 +920,51 @@ class StatusService:
             "priority_score": row["priority_score"],
             "status": row["status"],
             "project_id": row["project_id"],
+            "user_id": row["user_id"] if "user_id" in row.keys() else None,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
+
+    # ─── Content Deduplication ─────────────────────────
+
+    def find_similar_content(
+        self,
+        title: str,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        statuses: Optional[List[str]] = None,
+    ) -> List[ContentRecord]:
+        """Find content records with similar titles using LIKE matching.
+
+        Extracts significant words (>3 chars) from the title and checks
+        if all of them appear in existing content titles. Scoped by
+        user_id and project_id for multi-tenant isolation.
+        """
+        words = [w for w in title.lower().split() if len(w) > 3][:3]
+        if not words:
+            return []
+
+        query = "SELECT * FROM content_records WHERE 1=1"
+        params: list = []
+
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        if project_id:
+            query += " AND project_id = ?"
+            params.append(project_id)
+        if statuses:
+            placeholders = ", ".join("?" for _ in statuses)
+            query += f" AND status IN ({placeholders})"
+            params.extend(statuses)
+
+        for word in words:
+            query += " AND LOWER(title) LIKE ?"
+            params.append(f"%{word}%")
+
+        query += " LIMIT 5"
+        rows = self._conn.execute(query, params).fetchall()
+        return [self._row_to_record(row) for row in rows]
 
 
 # ─── Singleton ────────────────────────────────────────

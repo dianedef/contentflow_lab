@@ -98,6 +98,8 @@ class SchedulerService:
                 await self._run_ingest_competitors(job)
             elif job_type == "track_serp":
                 await self._run_track_serp(job)
+            elif job_type == "ingest_social":
+                await self._run_ingest_social(job)
             else:
                 print(f"⚠ Unknown job type: {job_type}")
 
@@ -211,8 +213,24 @@ class SchedulerService:
                 "angle": idea.get("raw_data", {}).get("angle", ""),
                 "pain_point_addressed": "",
                 "seo_keyword": idea["title"],
+                "source": idea.get("source"),
+                "source_idea_ids": [idea["id"]],
             }
             svc.update_idea(idea["id"], status="used")
+
+        # Pre-generation dedup check
+        if angle.get("title"):
+            try:
+                from utils.dedup import check_content_duplicate
+                duplicate = check_content_duplicate(
+                    title=angle["title"],
+                    project_id=job.get("project_id"),
+                )
+                if duplicate:
+                    print(f"⏭ Skipping duplicate: '{duplicate['title']}' already exists (status={duplicate['status']})")
+                    return
+            except Exception as e:
+                print(f"⚠ Dedup check failed (proceeding): {e}")
 
         # Extract competitor domains from idea data (competitor_watch ideas)
         idea_competitor_domains = None
@@ -484,6 +502,30 @@ class SchedulerService:
 
         except Exception as e:
             raise RuntimeError(f"SERP tracking failed: {e}") from e
+
+    async def _run_ingest_social(self, job: dict) -> None:
+        """Run social listening across Reddit, X, HN, YouTube into the Idea Pool."""
+        config = job.get("configuration", {})
+        topics = config.get("topics", [])
+
+        if not topics:
+            print("ℹ️  No topics configured for social listening, skipping")
+            return
+
+        try:
+            from agents.sources.social_listener import ingest_social_listening
+
+            result = await asyncio.to_thread(
+                ingest_social_listening,
+                topics=topics,
+                days_back=config.get("days_back", 30),
+                max_ideas=config.get("max_ideas", 50),
+                project_id=job.get("project_id"),
+            )
+            print(f"✅ Social listening: {result['count']} ideas ({result['sources']})")
+
+        except Exception as e:
+            raise RuntimeError(f"Social listening failed: {e}") from e
 
     async def _auto_transition_scheduled(self, svc) -> None:
         """Auto-transition content whose scheduledFor has passed."""
