@@ -300,14 +300,14 @@ class SEOResearchTools:
                 try:
                     df = pd.read_csv(file)
                     summary['total_keywords'] += len(df)
-                except:
+                except Exception:
                     pass
-            
+
             if file.suffix == '.csv' and 'crawl' in file.name:
                 try:
                     df = pd.read_csv(file)
                     summary['total_urls_crawled'] += len(df)
-                except:
+                except Exception:
                     pass
         
         print(f"   Files generated: {len(summary['files'])}")

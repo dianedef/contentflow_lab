@@ -14,6 +14,7 @@ from api.models.research import (
     CompetitorAnalysisResponse,
     CompetitorInfo,
 )
+from api.dependencies.auth import require_current_user
 from api.dependencies import get_research_analyst
 
 # Type hint only - not loaded at runtime
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 router = APIRouter(
     prefix="/api/research",
     tags=["Research & Analysis"],
+    dependencies=[Depends(require_current_user)],
 )
 
 

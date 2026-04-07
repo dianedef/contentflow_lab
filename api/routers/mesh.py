@@ -25,6 +25,7 @@ from api.models.mesh import (
     Recommendation,
     ImprovementPhase,
 )
+from api.dependencies.auth import require_current_user
 from api.dependencies import get_mesh_architect
 
 # Type hint only - not loaded at runtime
@@ -35,6 +36,7 @@ router = APIRouter(
     prefix="/api/mesh",
     tags=["Topical Mesh"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_current_user)],
 )
 
 

@@ -8,11 +8,13 @@ Provides endpoints for managing SEO content deployment:
 - Log viewing
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from typing import List, Optional
 import uuid
 import asyncio
 from datetime import datetime
+
+from api.dependencies.auth import require_current_user
 
 from api.models.deployment import (
     DeploymentRunRequest,
@@ -30,7 +32,11 @@ from api.models.deployment import (
     DeleteResponse,
 )
 
-router = APIRouter(prefix="/api/deployment", tags=["SEO Deployment"])
+router = APIRouter(
+    prefix="/api/deployment",
+    tags=["SEO Deployment"],
+    dependencies=[Depends(require_current_user)],
+)
 
 # In-memory state (replace with Redis/DB for production)
 _current_job: Optional[dict] = None

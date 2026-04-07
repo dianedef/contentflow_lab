@@ -11,8 +11,10 @@ Endpoints:
   GET    /api/drip/plans/{id}/stats   Get plan statistics
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
+
+from api.dependencies.auth import CurrentUser, require_current_user
 
 from api.models.drip import (
     CreateDripPlanRequest,
@@ -25,7 +27,11 @@ from api.models.status import ContentResponse
 from api.services.drip_service import DripService, DripPlanNotFoundError
 from status.service import get_status_service
 
-router = APIRouter(prefix="/api/drip", tags=["Content Drip"])
+router = APIRouter(
+    prefix="/api/drip",
+    tags=["Content Drip"],
+    dependencies=[Depends(require_current_user)],
+)
 
 
 def _get_drip_service() -> DripService:
@@ -41,12 +47,15 @@ def _get_drip_service() -> DripService:
     status_code=201,
     summary="Create a drip plan",
 )
-async def create_plan(request: CreateDripPlanRequest):
+async def create_plan(
+    request: CreateDripPlanRequest,
+    current_user: CurrentUser = Depends(require_current_user),
+):
     """Create a new progressive content publication plan."""
     svc = _get_drip_service()
     plan = svc.create_plan(
         name=request.name,
-        user_id="system",  # TODO: use CurrentUser when auth is wired
+        user_id=current_user.user_id,
         cadence_config=request.cadence.model_dump(),
         cluster_strategy=request.cluster_strategy.model_dump(),
         ssg_config=request.ssg_config.model_dump(),

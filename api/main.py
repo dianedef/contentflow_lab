@@ -224,7 +224,7 @@ app.add_middleware(
         "https://contentflowz.com",       # Production domain
         "https://www.contentflowz.com",   # Production domain
     ],
-    allow_origin_regex=r"https://.*\.(vercel\.app|railway\.app|render\.com)$",
+    allow_origin_regex=r"https://contentflowz[a-z0-9-]*\.(vercel\.app|railway\.app|render\.com)$",
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
@@ -238,12 +238,12 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler for unhandled errors"""
+    import logging
+    logging.getLogger("api").exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
         content={
             "error": "Internal Server Error",
-            "message": str(exc),
-            "type": type(exc).__name__
         }
     )
 

@@ -1,11 +1,16 @@
 """Run history endpoints — expose robot run logs to the dashboard."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 
+from api.dependencies.auth import require_current_user
 from agents.shared.run_history import RunHistory
 
-router = APIRouter(prefix="/runs", tags=["Runs"])
+router = APIRouter(
+    prefix="/runs",
+    tags=["Runs"],
+    dependencies=[Depends(require_current_user)],
+)
 
 
 def _get_history() -> RunHistory:

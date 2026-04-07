@@ -1,11 +1,17 @@
 """Newsletter generation and management endpoints."""
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-router = APIRouter(prefix="/api/newsletter", tags=["Newsletter"])
+from api.dependencies.auth import require_current_user
+
+router = APIRouter(
+    prefix="/api/newsletter",
+    tags=["Newsletter"],
+    dependencies=[Depends(require_current_user)],
+)
 
 
 class NewsletterRequest(BaseModel):

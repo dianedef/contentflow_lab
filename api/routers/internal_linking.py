@@ -14,6 +14,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from functools import lru_cache
 
+from api.dependencies.auth import require_current_user
 from agents.seo.schemas.internal_linking_schemas import (
     LinkingStrategyRequest,
     LinkingStrategyResponse,
@@ -37,6 +38,7 @@ router = APIRouter(
     prefix="/api/internal-linking",
     tags=["Internal Linking"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_current_user)],
 )
 
 

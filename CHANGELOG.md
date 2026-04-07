@@ -2,6 +2,19 @@
 
 All notable changes to Content Flows are documented here.
 
+## [2026-04-07]
+
+### Security
+- **Clerk JWT auth on 12 unprotected routers** — deployment, drip, templates, images, mesh, research, scheduler, newsletter, internal_linking, preview, reels, runs now require valid bearer token
+- **Shell injection eliminated** — all `subprocess.run(shell=True)` + f-string commands replaced with `shell=False` + list args in publishing_tools.py and tech_audit_tools.py
+- **Global exception handler no longer leaks internals** — `str(exc)` removed from 500 responses, errors logged server-side only
+- **CORS regex tightened** — `*.vercel.app` narrowed to `contentflowz*.vercel.app`
+- **Input sanitization** on test_runner.py user-supplied file paths
+
+### Fixed
+- 7 bare `except:` clauses replaced with `except Exception:` in repo_analyzer.py and seo_research_tools.py
+- Drip router now uses authenticated `current_user.user_id` instead of hardcoded `"system"`
+
 ## [2026-04-06]
 
 ### Added

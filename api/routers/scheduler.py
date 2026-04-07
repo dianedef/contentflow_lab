@@ -1,6 +1,6 @@
 """Scheduler management endpoints for persistent job scheduling."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List
 from datetime import datetime
 
@@ -10,9 +10,14 @@ from api.models.status import (
     ScheduleJobResponse,
     ContentResponse,
 )
+from api.dependencies.auth import require_current_user
 from status.service import get_status_service, ContentNotFoundError
 
-router = APIRouter(prefix="/api/scheduler", tags=["Scheduler"])
+router = APIRouter(
+    prefix="/api/scheduler",
+    tags=["Scheduler"],
+    dependencies=[Depends(require_current_user)],
+)
 
 
 def _job_to_response(job: dict) -> ScheduleJobResponse:

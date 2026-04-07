@@ -1,6 +1,6 @@
 """Content template management and AI generation endpoints."""
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from typing import Dict, Any, Optional
 from datetime import datetime
 import uuid
@@ -13,9 +13,14 @@ from api.models.templates import (
     GenerateContentRequest,
     GenerateContentResponse,
 )
+from api.dependencies.auth import require_current_user
 from api.services.template_defaults import get_default_templates
 
-router = APIRouter(prefix="/api/templates", tags=["Templates"])
+router = APIRouter(
+    prefix="/api/templates",
+    tags=["Templates"],
+    dependencies=[Depends(require_current_user)],
+)
 
 
 # In-memory job storage for content generation

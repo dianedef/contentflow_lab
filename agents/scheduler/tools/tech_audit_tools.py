@@ -78,12 +78,11 @@ class DependencyAnalyzer:
             }
 
             # Check for outdated packages
-            cmd = f"cd {self.project_path} && npm outdated --json"
             result = subprocess.run(
-                cmd,
-                shell=True,
+                ["npm", "outdated", "--json"],
+                cwd=str(self.project_path),
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             outdated = {}
@@ -322,13 +321,12 @@ class VulnerabilityScanner:
     def _npm_audit(self) -> Dict[str, Any]:
         """Run npm audit"""
         try:
-            cmd = f"cd {self.project_path} && npm audit --json"
             result = subprocess.run(
-                cmd,
-                shell=True,
+                ["npm", "audit", "--json"],
+                cwd=str(self.project_path),
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
             )
 
             if not result.stdout:
@@ -382,13 +380,12 @@ class VulnerabilityScanner:
         """Run pip vulnerability check"""
         try:
             # Note: Requires safety or pip-audit installed
-            cmd = f"cd {self.project_path} && pip-audit --format json"
             result = subprocess.run(
-                cmd,
-                shell=True,
+                ["pip-audit", "--format", "json"],
+                cwd=str(self.project_path),
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
             )
 
             if result.returncode == 0 and not result.stdout:
@@ -464,13 +461,12 @@ class BuildAnalyzer:
             # Run build and time it
             start_time = datetime.now()
 
-            cmd = f"cd {self.project_path} && npm run build"
             result = subprocess.run(
-                cmd,
-                shell=True,
+                ["npm", "run", "build"],
+                cwd=str(self.project_path),
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=300,  # 5 minute timeout
             )
 
             build_time = (datetime.now() - start_time).total_seconds()

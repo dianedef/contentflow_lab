@@ -9,8 +9,9 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.dependencies.auth import require_current_user
 from api.models.reels import (
     CookieStatusResponse,
     DeleteCookiesRequest,
@@ -25,6 +26,7 @@ router = APIRouter(
     prefix="/api/reels",
     tags=["Reels"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_current_user)],
 )
 
 

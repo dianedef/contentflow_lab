@@ -191,7 +191,7 @@ class GitHubRepoAnalyzer:
                         structure["framework"] = "Next.js"
                     elif "gatsby" in deps:
                         structure["framework"] = "Gatsby"
-            except:
+            except Exception:
                 pass
         
         # Find common content directories
@@ -273,7 +273,7 @@ class GitHubRepoAnalyzer:
                             frontmatter = self._extract_frontmatter(file_path)
                             if frontmatter:
                                 file_info["frontmatter"] = frontmatter
-                        except:
+                        except Exception:
                             pass
 
                         content_files.append(file_info)
@@ -310,7 +310,7 @@ class GitHubRepoAnalyzer:
                         frontmatter = self._extract_frontmatter(file_path)
                         if frontmatter:
                             file_info["frontmatter"] = frontmatter
-                    except:
+                    except Exception:
                         pass
 
                     content_files.append(file_info)
@@ -346,7 +346,7 @@ class GitHubRepoAnalyzer:
                     frontmatter[key] = value
             
             return frontmatter
-        except:
+        except Exception:
             return None
     
     def extract_metadata(self, repo_path: Path) -> Dict[str, Any]:
@@ -448,8 +448,8 @@ class GitHubRepoAnalyzer:
                         })
                         link_map["incoming_links"][link_url] += 1
                         link_map["total_links"] += 1
-            
-            except:
+
+            except Exception:
                 pass
             
             link_map["links_by_page"][file_info["path"]] = page_links

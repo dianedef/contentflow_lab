@@ -78,12 +78,10 @@ class GitDeployer:
                 }
 
             # Git add
-            add_cmd = f"git -C {self.repo_path} add {content_path}"
             result = subprocess.run(
-                add_cmd,
-                shell=True,
+                ["git", "-C", str(self.repo_path), "add", content_path],
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode != 0:
@@ -93,12 +91,10 @@ class GitDeployer:
                 }
 
             # Git commit
-            commit_cmd = f'git -C {self.repo_path} commit -m "{commit_message}"'
             result = subprocess.run(
-                commit_cmd,
-                shell=True,
+                ["git", "-C", str(self.repo_path), "commit", "-m", commit_message],
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode != 0:
@@ -115,23 +111,19 @@ class GitDeployer:
                 }
 
             # Get commit SHA
-            sha_cmd = f"git -C {self.repo_path} rev-parse HEAD"
             result = subprocess.run(
-                sha_cmd,
-                shell=True,
+                ["git", "-C", str(self.repo_path), "rev-parse", "HEAD"],
                 capture_output=True,
-                text=True
+                text=True,
             )
             commit_sha = result.stdout.strip()
 
             # Git push if auto_push
             if auto_push:
-                push_cmd = f"git -C {self.repo_path} push origin main"
                 result = subprocess.run(
-                    push_cmd,
-                    shell=True,
+                    ["git", "-C", str(self.repo_path), "push", "origin", "main"],
                     capture_output=True,
-                    text=True
+                    text=True,
                 )
 
                 if result.returncode != 0:
@@ -172,12 +164,10 @@ class GitDeployer:
         """
         try:
             # Git reset
-            reset_cmd = f"git -C {self.repo_path} reset --hard {commit_sha}"
             result = subprocess.run(
-                reset_cmd,
-                shell=True,
+                ["git", "-C", str(self.repo_path), "reset", "--hard", commit_sha],
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode != 0:
@@ -187,12 +177,10 @@ class GitDeployer:
                 }
 
             # Force push
-            push_cmd = f"git -C {self.repo_path} push --force origin main"
             result = subprocess.run(
-                push_cmd,
-                shell=True,
+                ["git", "-C", str(self.repo_path), "push", "--force", "origin", "main"],
                 capture_output=True,
-                text=True
+                text=True,
             )
 
             if result.returncode != 0:

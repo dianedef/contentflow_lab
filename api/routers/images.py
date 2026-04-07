@@ -33,6 +33,7 @@ from api.models.images import (
     GenerateImageFromProfileRequest,
     GenerateImageFromProfileResponse,
 )
+from api.dependencies.auth import require_current_user
 from api.dependencies import get_image_robot_crew
 from api.services.ai_image_generation import generate_openai_image_to_file
 from api.services.image_profiles import ImageProfileStore
@@ -48,6 +49,7 @@ router = APIRouter(
     prefix="/api/images",
     tags=["Image Robot"],
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(require_current_user)],
 )
 
 

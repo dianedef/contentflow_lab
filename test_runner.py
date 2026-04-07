@@ -64,6 +64,10 @@ def main():
     
     if command == "specific" and len(sys.argv) > 2:
         test_file = sys.argv[2]
+        # Sanitize: only allow paths with alphanumeric, /, _, -, .
+        if not all(c.isalnum() or c in "/_-." for c in test_file):
+            print(f"❌ Invalid test file path: {test_file}")
+            return 1
         cmd = f"source venv/bin/activate && python -m pytest {test_file} -v"
         desc = f"Specific Test: {test_file}"
         return run_command(cmd, desc)

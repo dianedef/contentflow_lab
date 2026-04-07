@@ -1,10 +1,15 @@
 """Preview Router — OpenGraph metadata extraction for link previews."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.dependencies.auth import require_current_user
 from api.services.og_preview import OGPreview, fetch_og_preview
 
-router = APIRouter(prefix="/api/preview", tags=["preview"])
+router = APIRouter(
+    prefix="/api/preview",
+    tags=["preview"],
+    dependencies=[Depends(require_current_user)],
+)
 
 
 @router.get(
