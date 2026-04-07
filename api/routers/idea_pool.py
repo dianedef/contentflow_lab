@@ -21,6 +21,34 @@ def _get_svc():
     return get_status_service()
 
 
+@router.get("/readiness", response_model=dict)
+async def idea_pool_readiness(
+    project_id: Optional[str] = Query(None),
+    current_user: CurrentUser = Depends(require_current_user),
+):
+    """Check if the idea pool has curated ideas ready for content generation."""
+    svc = _get_svc()
+    _, total_enriched = svc.list_ideas(
+        status="enriched", project_id=project_id,
+        user_id=current_user.user_id, limit=0,
+    )
+    _, total_raw = svc.list_ideas(
+        status="raw", project_id=project_id,
+        user_id=current_user.user_id, limit=0,
+    )
+    from api.services.user_data_store import user_data_store
+    settings = await user_data_store.get_user_settings(current_user.user_id)
+    rs = settings.get("robotSettings") or {}
+    enabled = bool(rs.get("ideaPoolEnabled", False)) if isinstance(rs, dict) else False
+
+    return {
+        "ideaPoolEnabled": enabled,
+        "enrichedCount": total_enriched,
+        "rawCount": total_raw,
+        "ready": total_enriched > 0 if enabled else True,
+    }
+
+
 @router.post("", response_model=dict)
 async def create_idea(
     request: CreateIdeaRequest,

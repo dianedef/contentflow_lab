@@ -43,6 +43,7 @@ class RobotSettings(BaseModel):
     schedules: dict[str, str] = Field(default_factory=dict)
     notifications: dict[str, bool] = Field(default_factory=dict)
     contentFrequency: ContentFrequencyConfig | None = None
+    ideaPoolEnabled: bool | None = None
 
 
 class UserSettingsResponse(BaseModel):

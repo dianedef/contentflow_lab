@@ -230,31 +230,73 @@ class SchedulerService:
         except Exception as e:
             raise RuntimeError(f"SEO generation failed: {e}") from e
 
+    async def _is_idea_pool_enabled(self, job: dict) -> bool:
+        """Check if idea pool curation is enabled for the user who owns this job."""
+        user_id = job.get("user_id")
+        if not user_id or user_id == "system":
+            return False
+        try:
+            from api.services.user_data_store import user_data_store
+            settings = await user_data_store.get_user_settings(user_id)
+            robot_settings = settings.get("robotSettings") or {}
+            return bool(robot_settings.get("ideaPoolEnabled", False))
+        except Exception:
+            return False
+
     async def _run_article_job(self, job: dict) -> None:
         """Run an article generation job. Picks the best idea from the pool."""
         config = job.get("configuration", {})
         svc = get_status_service()
 
-        # Try to get an enriched idea from the pool
-        idea = None
-        try:
-            ideas, _ = svc.list_ideas(status="enriched", min_score=50.0, limit=1)
-        except Exception:
-            ideas = []
+        idea_pool_enabled = await self._is_idea_pool_enabled(job)
 
+        idea = None
         angle = config.get("angle", {})
-        if ideas and not angle:
-            idea = ideas[0]
-            angle = {
-                "title": idea["title"],
-                "hook": idea.get("raw_data", {}).get("hook", idea["title"]),
-                "angle": idea.get("raw_data", {}).get("angle", ""),
-                "pain_point_addressed": "",
-                "seo_keyword": idea["title"],
-                "source": idea.get("source"),
-                "source_idea_ids": [idea["id"]],
-            }
-            svc.update_idea(idea["id"], status="used")
+
+        if idea_pool_enabled:
+            # CURATION MODE: require an enriched, user-curated idea
+            try:
+                ideas, _ = svc.list_ideas(
+                    status="enriched", min_score=50.0,
+                    project_id=job.get("project_id"),
+                    user_id=job.get("user_id"),
+                    limit=1,
+                )
+            except Exception:
+                ideas = []
+            if not ideas and not angle:
+                print(f"ℹ️  Article job {job['id']}: idea pool enabled but no curated ideas, skipping")
+                return
+            if ideas and not angle:
+                idea = ideas[0]
+                angle = {
+                    "title": idea["title"],
+                    "hook": idea.get("raw_data", {}).get("hook", idea["title"]),
+                    "angle": idea.get("raw_data", {}).get("angle", ""),
+                    "pain_point_addressed": "",
+                    "seo_keyword": idea["title"],
+                    "source": idea.get("source"),
+                    "source_idea_ids": [idea["id"]],
+                }
+                svc.update_idea(idea["id"], status="used")
+        else:
+            # AUTO MODE: best-effort from pool, same as previous behavior
+            try:
+                ideas, _ = svc.list_ideas(status="enriched", min_score=50.0, limit=1)
+            except Exception:
+                ideas = []
+            if ideas and not angle:
+                idea = ideas[0]
+                angle = {
+                    "title": idea["title"],
+                    "hook": idea.get("raw_data", {}).get("hook", idea["title"]),
+                    "angle": idea.get("raw_data", {}).get("angle", ""),
+                    "pain_point_addressed": "",
+                    "seo_keyword": idea["title"],
+                    "source": idea.get("source"),
+                    "source_idea_ids": [idea["id"]],
+                }
+                svc.update_idea(idea["id"], status="used")
 
         # Pre-generation dedup check
         if angle.get("title"):
