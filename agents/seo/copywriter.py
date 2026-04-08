@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 import os
 
 from agents.seo.tools.writing_tools import KeywordIntegrator
+from agents.shared.tools.firecrawl_tools import scrape_url
 
 load_dotenv()
 
@@ -62,6 +63,7 @@ class CopywriterAgent:
             ),
             tools=[
                 self.keyword_integrator.integrate_keywords,
+                scrape_url,
             ],
             llm=self.llm_model,  # CrewAI uses LiteLLM internally
             verbose=True,

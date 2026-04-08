@@ -26,6 +26,8 @@ from agents.seo.tools.research_tools import (
     consensus_deep_search_tool
 )
 from agents.seo.config.research_config import AI_TOOL_SETTINGS
+from agents.shared.tools.exa_tools import exa_search, exa_find_similar
+from agents.shared.tools.firecrawl_tools import scrape_url, crawl_site
 
 load_dotenv()
 
@@ -63,9 +65,13 @@ class ResearchAnalystAgent:
             analyze_serp_tool,
             monitor_trends_tool,
             identify_keyword_gaps_tool,
-            extract_ranking_patterns_tool
+            extract_ranking_patterns_tool,
+            exa_search,
+            exa_find_similar,
+            scrape_url,
+            crawl_site,
         ]
-        
+
         if self.use_consensus_ai:
             tools.append(consensus_deep_search_tool)
             

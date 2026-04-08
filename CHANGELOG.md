@@ -12,6 +12,12 @@ All notable changes to Content Flows are documented here.
 - **`CopywriterAgent.tools`** reduced from 4 hollow tools to 1 real tool (`integrate_keywords`)
 - **`ContentStrategistAgent.tools`** — removed `TopicClusterBuilder` from tool list
 
+### Added
+- **`agents/shared/tools/firecrawl_tools.py`** — 4 CrewAI `@tool` wrappers: `scrape_url`, `crawl_site`, `map_site`, `search_web` backed by Firecrawl SDK
+- **`agents/shared/tools/exa_tools.py`** — 3 CrewAI `@tool` wrappers: `exa_search`, `exa_find_similar`, `exa_get_contents` backed by Exa SDK (generalizes pattern from newsletter `content_tools.py`)
+- **SEO Research Analyst** now has `exa_search`, `exa_find_similar`, `scrape_url`, `crawl_site` for live web research during competitive analysis
+- **SEO Copywriter** now has `scrape_url` to read competitor articles before writing
+
 ### Removed (continued)
 - **Dead CrewAI objects in Scheduler and Images pipelines** — removed 5 unused `from crewai import` statements, 8 unused `Agent()`/`Task()` factory functions (`create_image_strategist`, `create_strategy_task`, `create_image_generator`, `create_generation_task`, `create_image_optimizer`, `create_optimization_task`, `create_cdn_manager`, `create_deployment_task`), 4 `_create_agent()` methods, and 8 `self.agent = ...` assignments that were created and immediately ignored (-631 lines)
 

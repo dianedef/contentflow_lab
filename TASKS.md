@@ -163,7 +163,7 @@ publish_result = self.publishing_agent.publish_content(content_path, ...)
 
 ---
 
-#### P0.4 — Brancher Firecrawl et Exa comme tools CrewAI
+#### P0.4 — Brancher Firecrawl et Exa comme tools CrewAI ✅
 
 **Problème :** Les packages `firecrawl-py` et `exa-py` sont dans `requirements.txt`, les clés API sont configurées dans `.env.example` et `sync_env_to_doppler.sh`, des specs existent (SPEC-content-crawling.md, SPEC-competitor-analysis.md), mais AUCUN agent n'utilise Firecrawl et seulement 1 agent utilise Exa (Newsletter content curator dans `agents/newsletter/tools/content_tools.py`). Tout est prêt, il manque le câblage.
 
