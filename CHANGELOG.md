@@ -5,6 +5,14 @@ All notable changes to Content Flows are documented here.
 ## [2026-04-08]
 
 ### Removed
+- **4 hollow SEO tools deleted** — `ContentWriter`, `MetadataGenerator`, `ToneAdapter` from `writing_tools.py` and `TopicClusterBuilder` from `strategy_tools.py`. These returned hardcoded dicts/templates instead of real output, degrading agent quality by anchoring LLM reasoning to fake data (-370 lines)
+
+### Changed
+- **`KeywordIntegrator` wired to DataForSEO** — replaced hollow `_suggest_variations` (string permutations) with `_get_keyword_data` calling `DataForSEOClient.keyword_overview` for real search volume, keyword difficulty, and related keywords. Graceful fallback when credentials unavailable
+- **`CopywriterAgent.tools`** reduced from 4 hollow tools to 1 real tool (`integrate_keywords`)
+- **`ContentStrategistAgent.tools`** — removed `TopicClusterBuilder` from tool list
+
+### Removed (continued)
 - **Dead CrewAI objects in Scheduler and Images pipelines** — removed 5 unused `from crewai import` statements, 8 unused `Agent()`/`Task()` factory functions (`create_image_strategist`, `create_strategy_task`, `create_image_generator`, `create_generation_task`, `create_image_optimizer`, `create_optimization_task`, `create_cdn_manager`, `create_deployment_task`), 4 `_create_agent()` methods, and 8 `self.agent = ...` assignments that were created and immediately ignored (-631 lines)
 
 ### Changed

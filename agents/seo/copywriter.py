@@ -13,12 +13,7 @@ from crewai import Agent, Task, Crew
 from dotenv import load_dotenv
 import os
 
-from agents.seo.tools.writing_tools import (
-    ContentWriter,
-    MetadataGenerator,
-    KeywordIntegrator,
-    ToneAdapter
-)
+from agents.seo.tools.writing_tools import KeywordIntegrator
 
 load_dotenv()
 
@@ -40,10 +35,7 @@ class CopywriterAgent:
         self.llm_model = llm_model
 
         # Initialize tools
-        self.content_writer = ContentWriter()
-        self.metadata_generator = MetadataGenerator()
         self.keyword_integrator = KeywordIntegrator()
-        self.tone_adapter = ToneAdapter()
 
         # Create agent
         self.agent = self._create_agent()
@@ -69,10 +61,7 @@ class CopywriterAgent:
                 "storytelling, and making complex topics accessible."
             ),
             tools=[
-                self.content_writer.write_content,
-                self.metadata_generator.generate_metadata,
                 self.keyword_integrator.integrate_keywords,
-                self.tone_adapter.adapt_tone
             ],
             llm=self.llm_model,  # CrewAI uses LiteLLM internally
             verbose=True,

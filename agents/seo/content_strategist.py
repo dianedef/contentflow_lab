@@ -28,7 +28,6 @@ import logging
 
 # Local imports
 from .tools.strategy_tools import (
-    TopicClusterBuilder,
     OutlineGenerator,
     TopicalFlowOptimizer,
     EditorialCalendarPlanner,
@@ -73,7 +72,6 @@ class ContentStrategistAgent:
             self.llm_model = llm_model
 
             # Initialize tools with consistent error handling
-            self.cluster_builder = self._safe_tool_init(TopicClusterBuilder)
             self.outline_generator = self._safe_tool_init(OutlineGenerator)
             self.flow_optimizer = self._safe_tool_init(TopicalFlowOptimizer)
             self.calendar_planner = self._safe_tool_init(EditorialCalendarPlanner)
@@ -115,15 +113,6 @@ class ContentStrategistAgent:
             Configured CrewAI Agent
         """
         tool_list = [
-            Tool.tool(
-                name="Build Topic Cluster",
-                func=self.cluster_builder.build_topic_cluster,
-                description=(
-                    "Build a comprehensive topic cluster with pillar pages "
-                    "and supporting content. Creates semantic relationships "
-                    "between topics for enhanced topical authority."
-                )
-            ),
             Tool.tool(
                 name="Generate Content Outline",
                 func=self.outline_generator.generate_outline,

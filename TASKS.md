@@ -131,9 +131,9 @@ publish_result = self.publishing_agent.publish_content(content_path, ...)
 
 ---
 
-#### P0.3 — Supprimer ou enrichir les tools coquilles vides
+#### P0.3 — Supprimer ou enrichir les tools coquilles vides ✅
 
-- [ ] **Auditer et corriger chaque tool factice du robot SEO**
+- [x] **Auditer et corriger chaque tool factice du robot SEO**
 
 **Problème :** Les tools des agents SEO renvoient des données statiques ou des templates hardcodés au lieu d'utiliser le LLM ou des APIs réelles :
 
