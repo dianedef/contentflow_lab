@@ -13,17 +13,18 @@ backstory: >
 tasks:
   strategy:
     description: |
-      Create a comprehensive content strategy for "{target_keyword}" based on research insights.
+      Using the research insights provided in context, create a comprehensive content strategy.
 
-      RESEARCH INSIGHTS:
-      {research_insights}
+      TARGET KEYWORD: {target_keyword}
+      CONTENT PIECES TO PLAN: {content_count}
+      BUSINESS GOALS: {business_goals}
+      EXISTING CONTENT: {existing_content}
 
       STRATEGY REQUIREMENTS:
       - Design pillar page and topic cluster architecture
-      - Create detailed content outlines for {content_count} pieces
+      - Create detailed content outlines for each piece
       - Map internal linking opportunities
-      - Align with business goals: {business_goals}
-      - Account for existing content: {existing_content}
+      - Build an editorial calendar with priorities
 
       Deliver a structured content plan in markdown format with topic cluster
       architecture, outlines, and editorial calendar.

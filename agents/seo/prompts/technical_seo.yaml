@@ -18,16 +18,11 @@ backstory: >
 tasks:
   technical_optimization:
     description: |
-      Perform comprehensive technical SEO optimization for the article.
-
-      ARTICLE CONTENT:
-      {article_content}
+      Using the article written by the Copywriter (provided in context),
+      perform comprehensive technical SEO optimization.
 
       ARTICLE METADATA:
       {article_metadata}
-
-      SITE STRUCTURE:
-      {site_structure}
 
       EXISTING PAGES (for internal linking):
       {existing_pages}

@@ -71,121 +71,46 @@ class OnPageTechnicalSEOAgent:
     
     def create_technical_task(
         self,
-        article_content: str,
         article_metadata: Dict[str, Any],
         site_structure: Optional[Dict[str, Any]] = None,
         existing_pages: Optional[List[str]] = None
     ) -> Task:
-        """
-        Create a technical SEO optimization task.
-        
-        Args:
-            article_content: Written article content
-            article_metadata: Metadata (title, description, keywords)
-            site_structure: Site structure information
-            existing_pages: List of existing pages for internal linking
-            
-        Returns:
-            CrewAI Task configured for technical SEO
-        """
-        description = f"""
-        Perform comprehensive technical SEO optimization for the provided article.
-        
-        ARTICLE METADATA:
-        Title: {article_metadata.get('title', 'N/A')}
-        Description: {article_metadata.get('description', 'N/A')}
-        Keywords: {', '.join(article_metadata.get('keywords', []))}
-        
-        ARTICLE CONTENT:
-        {article_content[:1000]}...
-        
-        YOUR TECHNICAL SEO DELIVERABLES:
-        
-        1. SCHEMA.ORG STRUCTURED DATA:
-           - Generate Article schema with all required properties:
-             * headline, description, author
-             * datePublished, dateModified
-             * image (suggest requirements)
-             * publisher information
-           - Add BreadcrumbList schema if applicable
-           - Include FAQPage schema if article has Q&A sections
-           - Validate JSON-LD syntax
-           - Ensure compliance with Google's structured data guidelines
-        
-        2. METADATA VALIDATION:
-           - Verify title tag length (50-60 characters optimal)
-           - Check meta description length (150-160 characters)
-           - Validate Open Graph tags for social sharing
-           - Verify Twitter Card tags
-           - Check for missing or duplicate metadata
-           - Ensure keyword appears in metadata naturally
-        
-        3. ON-PAGE OPTIMIZATION:
-           - Validate heading hierarchy (single H1, proper H2-H6 structure)
-           - Check image alt text recommendations
-           - Verify internal linking opportunities
-           - Analyze keyword placement and density
-           - Check URL structure recommendations
-           - Validate semantic HTML usage
-        """
-        
-        if existing_pages:
-            description += f"""
-        4. INTERNAL LINKING ANALYSIS:
-           - Identify relevant pages to link to from: {', '.join(existing_pages[:5])}
-           - Recommend optimal anchor text for internal links
-           - Suggest contextual linking locations
-           - Analyze link depth and crawl path
-           - Ensure proper link equity distribution
-        """
-        
-        if site_structure:
-            description += """
-        5. SITE ARCHITECTURE:
-           - Validate article placement in site structure
-           - Check breadcrumb implementation
-           - Verify category and tag assignments
-           - Ensure proper pagination if applicable
-        """
-        
+        """Create a technical SEO task. Article content is injected via task.context."""
+        p = load_prompt("seo", "technical_seo")
+        task_cfg = p["tasks"]["technical_optimization"]
+        description = task_cfg["description"].format(
+            article_metadata=(
+                f"Title: {article_metadata.get('title', 'N/A')}\n"
+                f"Description: {article_metadata.get('description', 'N/A')}\n"
+                f"Keywords: {', '.join(article_metadata.get('keywords', []))}"
+            ),
+            existing_pages=", ".join(existing_pages[:5]) if existing_pages else "None",
+        )
+
         description += """
-        
-        6. TECHNICAL CHECKLIST:
-           - Canonical URL specification
-           - Mobile-friendliness considerations
-           - Page speed optimization notes
-           - Core Web Vitals impact assessment
-           - Robots meta tag recommendations
-           - XML sitemap inclusion verification
-        
-        DELIVERABLE FORMAT:
-        Provide a comprehensive technical SEO report with:
-        - Complete schema.org JSON-LD markup (ready to implement)
-        - Validated metadata elements
-        - On-page optimization checklist with issues and fixes
-        - Internal linking recommendations with specific anchor text
-        - Technical implementation notes
-        - Priority list of fixes (high/medium/low)
-        
-        QUALITY STANDARDS:
-        - All structured data must validate against schema.org standards
-        - Metadata must follow Google's best practices
-        - Recommendations must be specific and actionable
-        - Include code snippets where applicable
-        - Prioritize changes by SEO impact
-        
-        Remember: Technical SEO is the foundation that allows great content to rank.
-        Your optimizations directly impact crawlability, indexation, and rankings.
-        """
-        
+
+      YOUR TECHNICAL SEO DELIVERABLES:
+
+      1. SCHEMA.ORG STRUCTURED DATA:
+         - Generate Article schema (headline, description, author, datePublished)
+         - Add BreadcrumbList and FAQPage schemas where applicable
+         - Validate JSON-LD syntax
+
+      2. METADATA VALIDATION:
+         - Title tag (50-60 characters), meta description (150-160 characters)
+         - Open Graph and Twitter Card tags
+
+      3. ON-PAGE OPTIMIZATION:
+         - Heading hierarchy, alt text, keyword placement, URL recommendations
+
+      DELIVERABLE FORMAT:
+      Complete technical SEO report with JSON-LD markup, validated metadata,
+      on-page checklist, and prioritized action items."""
+
         return Task(
             description=description,
             agent=self.agent,
-            expected_output=(
-                "A complete technical SEO optimization report with schema.org markup, "
-                "validated metadata, on-page optimization recommendations, internal linking "
-                "strategy, and prioritized action items with implementation code."
-            )
+            expected_output=task_cfg["expected_output"],
         )
     
     def optimize_technical_seo(

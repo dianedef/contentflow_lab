@@ -69,148 +69,32 @@ class EditorAgent:
     
     def create_editing_task(
         self,
-        article_content: str,
-        technical_seo_report: str,
         brand_guidelines: Optional[Dict[str, Any]] = None,
         quality_standards: Optional[Dict[str, Any]] = None
     ) -> Task:
-        """
-        Create a comprehensive editing and QA task.
-        
-        Args:
-            article_content: Complete article from Copywriter
-            technical_seo_report: Technical SEO recommendations
-            brand_guidelines: Brand voice and style guidelines
-            quality_standards: Quality criteria and thresholds
-            
-        Returns:
-            CrewAI Task configured for final editing
-        """
-        description = f"""
-        Perform final editorial review and prepare content for publication.
-        
-        ARTICLE TO REVIEW:
-        {article_content[:1500]}...
-        
-        TECHNICAL SEO REPORT:
-        {technical_seo_report[:800]}...
-        
-        YOUR EDITORIAL RESPONSIBILITIES:
-        
-        1. CONTENT QUALITY REVIEW:
-           - Grammar and spelling (zero tolerance for errors)
-           - Sentence structure and clarity
-           - Paragraph flow and transitions
-           - Logical argument progression
-           - Factual accuracy and claims verification
-           - Reading level appropriateness (target: 8th-9th grade)
-           - Word choice precision and effectiveness
-        
-        2. CONSISTENCY VALIDATION:
-           - Tone of voice consistency throughout
-           - Terminology usage (consistent terms for same concepts)
-           - Formatting consistency (lists, emphasis, capitalization)
-           - Brand voice alignment
-           - Style guide compliance
-           - Heading hierarchy and structure
-        
-        3. SEO QUALITY ASSURANCE:
-           - Keyword integration feels natural (not forced)
-           - Metadata is compelling and accurate
-           - Internal links are contextual and valuable
-           - Heading structure supports SEO and readability
-           - Content satisfies search intent
-           - Schema markup is implemented correctly
-        
-        4. ENGAGEMENT OPTIMIZATION:
-           - Hook strength (first 100 words)
-           - Section-by-section engagement
-           - Example quality and relevance
-           - Call-to-action clarity and placement
-           - Visual element suggestions
-           - Scanability (headings, lists, formatting)
-        """
-        
+        """Create a final editing task. Article and SEO report are injected via task.context."""
+        p = load_prompt("seo", "editor")
+        task_cfg = p["tasks"]["editing"]
+        description = task_cfg["description"]
+
         if brand_guidelines:
-            description += f"""
-        5. BRAND ALIGNMENT:
-           - Voice: {brand_guidelines.get('voice', 'Not specified')}
-           - Values: {', '.join(brand_guidelines.get('values', []))}
-           - Tone: {brand_guidelines.get('tone', 'Not specified')}
-           - Style notes: {brand_guidelines.get('style_notes', 'Not specified')}
-           - Ensure content reflects brand personality
-        """
-        
+            description += (
+                f"\n\nBRAND GUIDELINES: Voice={brand_guidelines.get('voice', 'N/A')}, "
+                f"Tone={brand_guidelines.get('tone', 'N/A')}, "
+                f"Values={', '.join(brand_guidelines.get('values', []))}"
+            )
+
         if quality_standards:
-            description += f"""
-        6. QUALITY STANDARDS VALIDATION:
-           - Minimum word count: {quality_standards.get('min_words', 1500)}
-           - Uniqueness target: {quality_standards.get('uniqueness', 90)}%
-           - Readability score: {quality_standards.get('readability_target', 'Flesch 60-70')}
-           - Error tolerance: {quality_standards.get('error_tolerance', 'Zero')}
-        """
-        
-        description += """
-        
-        7. MARKDOWN FORMATTING:
-           - Proper heading hierarchy (single H1, nested H2-H6)
-           - Consistent list formatting
-           - Proper link markdown syntax
-           - Image placeholder formatting
-           - Code block formatting if applicable
-           - Frontmatter metadata (YAML)
-           - Clean, valid markdown syntax
-        
-        8. PUBLICATION PREPARATION:
-           - Finalize title and meta description
-           - Verify all schema markup is included
-           - Check all internal link placeholders are filled
-           - Ensure image placeholders have descriptions
-           - Add publication checklist
-           - Flag any remaining TODOs or reviews needed
-        
-        DELIVERABLE FORMAT:
-        Provide three outputs:
-        
-        A) EDITORIAL REPORT:
-           - Issues found (categorized by severity: critical/major/minor)
-           - Changes made and rationale
-           - Quality scores (grammar, SEO, engagement, brand fit)
-           - Overall content grade (A-F)
-           - Publication readiness assessment
-        
-        B) FINAL ARTICLE (CLEAN):
-           - Fully edited, publication-ready markdown
-           - All metadata and frontmatter
-           - Schema markup included
-           - All links and images specified
-           - Properly formatted and validated
-        
-        C) PUBLICATION CHECKLIST:
-           - Pre-publication verification steps
-           - Post-publication monitoring tasks
-           - Success metrics to track
-        
-        EDITORIAL STANDARDS:
-        - Every sentence must serve the reader
-        - Zero grammatical or spelling errors
-        - Consistent tone and voice throughout
-        - Engaging from first word to last
-        - SEO-optimized without feeling optimized
-        - Ready to represent the brand publicly
-        
-        You are the last line of defense before publication. If you're not 100% confident
-        the content meets our standards, flag it for revision. Excellence is non-negotiable.
-        """
-        
+            description += (
+                f"\n\nQUALITY STANDARDS: Min words={quality_standards.get('min_words', 1500)}, "
+                f"Uniqueness={quality_standards.get('uniqueness', 90)}%, "
+                f"Readability={quality_standards.get('readability_target', 'Flesch 60-70')}"
+            )
+
         return Task(
             description=description,
             agent=self.agent,
-            expected_output=(
-                "Three documents: (1) Detailed editorial report with quality assessment, "
-                "(2) Final, publication-ready article in markdown format, and "
-                "(3) Publication checklist with verification steps."
-            )
+            expected_output=task_cfg["expected_output"],
         )
     
     def edit_and_finalize(

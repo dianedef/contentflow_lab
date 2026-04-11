@@ -127,176 +127,125 @@ class SEOContentCrew:
             },
             "outputs": {}
         }
-        
-        # STAGE 1: Research & Analysis
-        print("\n📊 STAGE 1: RESEARCH & COMPETITIVE ANALYSIS")
-        print("-" * 60)
-        
+
+        # Build shared keyword list
+        keywords = [target_keyword]
+        if sector:
+            keywords.append(f"{target_keyword} {sector}")
+
+        # --- Create all tasks (no kickoff between them) ---
+
         research_task = self.research_agent.create_analysis_task(
             target_keyword=target_keyword,
             competitor_domains=competitor_domains,
             sector=sector,
-            target_domain=existing_content[0] if existing_content else None
+            target_domain=existing_content[0] if existing_content else None,
         )
-        
-        research_crew = Crew(
-            agents=[self.research_agent.agent],
-            tasks=[research_task],
-            verbose=True,
-            process=Process.sequential
-        )
-        
-        research_output = research_crew.kickoff()
-        results["outputs"]["research"] = str(research_output)
-        print(f"\n✅ Research complete: {len(str(research_output))} characters\n")
-        
-        # STAGE 2: Content Strategy
-        print("\n📋 STAGE 2: CONTENT STRATEGY & PLANNING")
-        print("-" * 60)
-        
+
         strategy_task = self.strategy_agent.create_strategy_task(
-            research_insights=str(research_output),
             target_keyword=target_keyword,
             existing_content=existing_content,
             business_goals=business_goals,
-            content_count=5
+            content_count=5,
         )
-        
-        strategy_crew = Crew(
-            agents=[self.strategy_agent.agent],
-            tasks=[strategy_task],
-            verbose=True,
-            process=Process.sequential
-        )
-        
-        strategy_output = strategy_crew.kickoff()
-        results["outputs"]["strategy"] = str(strategy_output)
-        print(f"\n✅ Strategy complete: {len(str(strategy_output))} characters\n")
-        
-        # Extract outline from strategy (simplified - in production would parse markdown)
-        outline = str(strategy_output)[:2000]  # Use first 2000 chars as outline
-        
-        # STAGE 3: Content Writing
-        print("\n✍️  STAGE 3: CONTENT WRITING")
-        print("-" * 60)
-        
-        # Extract keywords (primary + variations)
-        keywords = [target_keyword]
-        if sector:
-            keywords.append(f"{target_keyword} {sector}")
-        
+        strategy_task.context = [research_task]
+
         writing_task = self.copywriter_agent.create_writing_task(
-            content_outline=outline,
             target_keywords=keywords,
             tone=tone,
             brand_voice=brand_voice,
             target_audience=target_audience,
-            word_count=word_count
+            word_count=word_count,
         )
-        
-        writing_crew = Crew(
-            agents=[self.copywriter_agent.agent],
-            tasks=[writing_task],
-            verbose=True,
-            process=Process.sequential
-        )
-        
-        article_output = writing_crew.kickoff()
-        results["outputs"]["article"] = str(article_output)
-        print(f"\n✅ Article complete: {len(str(article_output))} characters\n")
-        
-        # STAGE 4: Technical SEO
-        print("\n🔧 STAGE 4: TECHNICAL SEO OPTIMIZATION")
-        print("-" * 60)
-        
+        writing_task.context = [research_task, strategy_task]
+
         metadata = {
             "title": f"{target_keyword} - Complete Guide",
             "description": f"Learn everything about {target_keyword}",
-            "keywords": keywords
+            "keywords": keywords,
         }
-        
+
         technical_task = self.technical_agent.create_technical_task(
-            article_content=str(article_output),
             article_metadata=metadata,
-            existing_pages=existing_content
+            existing_pages=existing_content,
         )
-        
-        technical_crew = Crew(
-            agents=[self.technical_agent.agent],
-            tasks=[technical_task],
-            verbose=True,
-            process=Process.sequential
-        )
-        
-        technical_output = technical_crew.kickoff()
-        results["outputs"]["technical_seo"] = str(technical_output)
-        print(f"\n✅ Technical SEO complete: {len(str(technical_output))} characters\n")
-        
-        # STAGE 5: Marketing Strategy & Business Validation
-        print("\n💼 STAGE 5: MARKETING STRATEGY & BUSINESS VALIDATION")
-        print("-" * 60)
-        
+        technical_task.context = [writing_task]
+
         marketing_task = self.marketing_agent.create_strategy_task(
-            content_strategy=str(strategy_output),
-            article_content=str(article_output),
-            technical_seo=str(technical_output),
             business_goals=business_goals,
-            target_audience=target_audience
+            target_audience=target_audience,
         )
-        
-        marketing_crew = Crew(
-            agents=[self.marketing_agent.agent],
-            tasks=[marketing_task],
-            verbose=True,
-            process=Process.sequential
-        )
-        
-        marketing_output = marketing_crew.kickoff()
-        results["outputs"]["marketing_strategy"] = str(marketing_output)
-        print(f"\n✅ Marketing strategy complete: {len(str(marketing_output))} characters\n")
-        
-        # STAGE 6: Final Editing & QA
-        print("\n📝 STAGE 6: EDITORIAL REVIEW & FINALIZATION")
-        print("-" * 60)
-        
+        marketing_task.context = [strategy_task, writing_task, technical_task]
+
         brand_guidelines = None
         if brand_voice:
             brand_guidelines = {
                 "voice": brand_voice,
                 "tone": tone,
-                "values": business_goals if business_goals else []
+                "values": business_goals or [],
             }
-        
+
         quality_standards = {
             "min_words": word_count,
             "uniqueness": 90,
             "readability_target": "Flesch 60-70",
-            "error_tolerance": "Zero"
+            "error_tolerance": "Zero",
         }
-        
+
         editing_task = self.editor_agent.create_editing_task(
-            article_content=str(article_output),
-            technical_seo_report=str(technical_output),
             brand_guidelines=brand_guidelines,
-            quality_standards=quality_standards
+            quality_standards=quality_standards,
         )
-        
-        editing_crew = Crew(
-            agents=[self.editor_agent.agent],
-            tasks=[editing_task],
+        editing_task.context = [writing_task, technical_task, marketing_task]
+
+        # --- Single Crew, Process.sequential ---
+        print("\n🚀 Running unified 6-agent SEO Crew (Process.sequential)")
+        print("-" * 60)
+
+        crew = Crew(
+            agents=[
+                self.research_agent.agent,
+                self.strategy_agent.agent,
+                self.copywriter_agent.agent,
+                self.technical_agent.agent,
+                self.marketing_agent.agent,
+                self.editor_agent.agent,
+            ],
+            tasks=[
+                research_task,
+                strategy_task,
+                writing_task,
+                technical_task,
+                marketing_task,
+                editing_task,
+            ],
+            process=Process.sequential,
             verbose=True,
-            process=Process.sequential
         )
-        
-        final_output = editing_crew.kickoff()
-        results["outputs"]["final_article"] = str(final_output)
-        print(f"\n✅ Editorial review complete: {len(str(final_output))} characters\n")
+
+        crew.kickoff()
+
+        # Collect per-stage outputs from task.output (preserves existing API shape)
+        def _raw(task) -> str:
+            return task.output.raw if task.output else ""
+
+        results["outputs"] = {
+            "research": _raw(research_task),
+            "strategy": _raw(strategy_task),
+            "article": _raw(writing_task),
+            "technical_seo": _raw(technical_task),
+            "marketing_strategy": _raw(marketing_task),
+            "final_article": _raw(editing_task),
+        }
+
+        final_output = results["outputs"]["final_article"]
+        print(f"\n✅ Pipeline complete — final article: {len(final_output)} characters\n")
         
         # Status tracking: mark as generated → pending_review
         if STATUS_AVAILABLE and status_record_id:
             try:
                 status_svc = get_status_service()
-                final_content = results["outputs"].get("final_article", "")
+                final_content = final_output
                 status_svc.update_content(
                     status_record_id,
                     content_preview=final_content[:500] if final_content else None,

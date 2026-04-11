@@ -19,14 +19,12 @@ backstory: >
 tasks:
   writing:
     description: |
-      Write a comprehensive, SEO-optimized article based on the following outline.
+      Using the content outline provided in context by the Content Strategist,
+      write a comprehensive, SEO-optimized article.
 
       PRIMARY KEYWORD: {primary_keyword}
       TARGET WORD COUNT: {word_count} words
       TONE: {tone}
-
-      CONTENT OUTLINE:
-      {content_outline}
 
       YOUR WRITING REQUIREMENTS:
 

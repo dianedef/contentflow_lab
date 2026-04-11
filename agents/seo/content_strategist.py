@@ -154,35 +154,24 @@ class ContentStrategistAgent:
     
     def create_strategy_task(
         self,
-        research_insights: str,
         target_keyword: str,
         existing_content: Optional[List[str]] = None,
         business_goals: Optional[List[str]] = None,
         content_count: int = 5
     ) -> Task:
-        """
-        Create a comprehensive content strategy task.
-        
-        Args:
-            research_insights: Research Analyst output
-            target_keyword: Primary target keyword/topic
-            existing_content: List of existing content URLs/titles
-            business_goals: Business objectives to align strategy
-            content_count: Number of content pieces to plan
-        
-        Returns:
-            Configured CrewAI Task
-        """
-        # Task description generation logic remains the same as in original implementation
-        description = f"""Content strategy for "{target_keyword}" based on research insights..."""
-        
+        """Create a content strategy task. Research context is injected via task.context."""
+        p = load_prompt("seo", "content_strategist")
+        task_cfg = p["tasks"]["strategy"]
+        description = task_cfg["description"].format(
+            target_keyword=target_keyword,
+            content_count=content_count,
+            business_goals=", ".join(business_goals or ["Increase organic traffic"]),
+            existing_content=", ".join(existing_content or ["None"]),
+        )
         return Task(
             description=description,
             agent=self.agent,
-            expected_output=(
-                "Comprehensive markdown content strategy with "
-                "topic cluster architecture, outlines, and editorial calendar."
-            )
+            expected_output=task_cfg["expected_output"],
         )
     
     def run_strategy(

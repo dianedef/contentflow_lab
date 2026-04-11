@@ -69,163 +69,40 @@ class MarketingStrategistAgent:
     
     def create_strategy_task(
         self,
-        content_strategy: str,
-        article_content: str,
-        technical_seo: str,
         business_goals: Optional[List[str]] = None,
         target_audience: Optional[str] = None,
         competitive_landscape: Optional[Dict[str, Any]] = None,
         budget_constraints: Optional[Dict[str, Any]] = None
     ) -> Task:
-        """
-        Create a marketing strategy validation task.
-        
-        Args:
-            content_strategy: Output from Content Strategist
-            article_content: Output from Copywriter
-            technical_seo: Output from Technical SEO Specialist
-            business_goals: List of business objectives
-            target_audience: Target audience description
-            competitive_landscape: Competitive analysis data
-            budget_constraints: Budget and resource constraints
-            
-        Returns:
-            CrewAI Task configured for marketing strategy
-        """
-        description = f"""
-        Review the content strategy, article, and technical SEO implementation from a 
-        business and marketing perspective. Ensure alignment with business goals and 
-        validate the potential ROI of this content investment.
-        
-        CONTENT STRATEGY OVERVIEW:
-        {content_strategy[:1000]}...
-        
-        ARTICLE SUMMARY:
-        {article_content[:800]}...
-        
-        TECHNICAL SEO ELEMENTS:
-        {technical_seo[:600]}...
-        
-        YOUR STRATEGIC ANALYSIS DELIVERABLES:
-        
-        1. BUSINESS ALIGNMENT ASSESSMENT:
-           - Evaluate how this content supports business objectives
-           - Identify which stage of the buyer's journey it serves
-           - Assess target audience fit and messaging alignment
-           - Validate content positioning against brand strategy
-           - Rate business relevance: High/Medium/Low
-        """
-        
+        """Create a marketing strategy task. Content/strategy/technical context injected via task.context."""
+        p = load_prompt("seo", "marketing_strategist")
+        task_cfg = p["tasks"]["strategy_validation"]
+        description = task_cfg["description"].format(
+            business_goals=", ".join(business_goals or ["Increase organic traffic and conversions"]),
+            target_audience=target_audience or "Not specified",
+        )
+
         if business_goals:
             description += f"""
-        2. GOAL ALIGNMENT ANALYSIS:
-           Business Goals: {', '.join(business_goals)}
-           
-           For each goal, assess:
-           - How this content contributes to achieving the goal
-           - Expected impact (direct/indirect/minimal)
-           - Timeline to see results (immediate/short-term/long-term)
-           - Key metrics to track success
-           - Potential bottlenecks or challenges
-        """
-        
-        description += """
-        3. ROI PROJECTION:
-           - Estimate potential organic traffic (monthly)
-           - Project conversion potential based on search intent
-           - Calculate content creation cost vs. potential value
-           - Assess payback period (when content becomes profitable)
-           - Compare ROI to alternative marketing investments
-           - Risk assessment: What could prevent ROI realization?
-        
-        4. PRIORITIZATION RECOMMENDATION:
-           Create a priority score (0-100) based on:
-           - Business impact potential (40%)
-           - Resource efficiency (20%)
-           - Competitive advantage (20%)
-           - Time to results (10%)
-           - Strategic fit (10%)
-           
-           Recommendation: High Priority / Medium Priority / Low Priority / Reconsider
-        """
-        
+
+      GOAL ALIGNMENT: For each goal ({', '.join(business_goals)}), assess contribution,
+      expected impact, timeline to results, and key metrics."""
+
         if competitive_landscape:
             description += """
-        5. COMPETITIVE POSITIONING:
-           - How does this content differentiate us from competitors?
-           - What unique value does it provide?
-           - Will it help us gain competitive advantage?
-           - Are we late to the topic or leading the conversation?
-           - Recommended positioning strategy
-        """
-        
-        if target_audience:
-            description += f"""
-        6. AUDIENCE ALIGNMENT:
-           Target Audience: {target_audience}
-           
-           Validate:
-           - Content speaks to audience pain points
-           - Tone and complexity match audience sophistication
-           - Examples and use cases resonate with audience
-           - Call-to-action is appropriate for audience stage
-           - Distribution channels align with where audience is
-        """
+
+      COMPETITIVE POSITIONING: How does this content differentiate us?
+      Are we leading or late to this topic?"""
         
         description += """
-        7. STRATEGIC RECOMMENDATIONS:
-           - Content optimization opportunities for higher business impact
-           - Distribution and promotion strategy suggestions
-           - Conversion optimization recommendations
-           - Internal linking to high-value pages
-           - Repurposing opportunities (webinar, email series, social)
-           - Quick wins vs. long-term plays
-        
-        8. RISK ANALYSIS:
-           - What could prevent this content from achieving goals?
-           - Are we targeting the right keywords for business outcomes?
-           - Is search volume sufficient for business impact?
-           - Competitive risk: Can we realistically rank?
-           - Brand risk: Any messaging concerns?
-        
-        9. SUCCESS METRICS & KPIs:
-           Define specific, measurable KPIs:
-           - Traffic metrics (sessions, users, pages/session)
-           - Engagement metrics (time on page, scroll depth, CTR)
-           - Conversion metrics (leads, signups, sales)
-           - SEO metrics (rankings, impressions, featured snippets)
-           - Business metrics (pipeline, revenue, customer acquisition cost)
-           - Timeline: 30/60/90-day benchmarks
-        
-        DELIVERABLE FORMAT:
-        Provide a comprehensive marketing strategy report with:
-        - Executive Summary (business alignment score, priority level)
-        - ROI Projection with assumptions and calculations
-        - Prioritization Matrix (visual or structured format)
-        - Strategic Recommendations (prioritized by impact)
-        - Success Metrics Dashboard
-        - Go/No-Go Recommendation with rationale
-        
-        DECISION FRAMEWORK:
-        - HIGH PRIORITY: Strong business alignment, clear ROI path, competitive advantage
-        - MEDIUM PRIORITY: Good potential but needs optimization or has moderate risk
-        - LOW PRIORITY: Weak business case, better alternatives exist
-        - RECONSIDER: Doesn't align with business goals, poor ROI potential, high risk
-        
-        Remember: You're the business conscience of this system. Traffic without conversions 
-        is vanity. Rankings without revenue is meaningless. Every content piece must justify 
-        its existence with clear business value. Be honest about weak business cases - it's 
-        better to kill a weak idea than waste resources on content that won't move the needle.
-        """
-        
+
+      DELIVERABLES: ROI projection, priority score (0-100), strategic recommendations,
+      success KPIs (30/60/90-day benchmarks), and Go/No-Go recommendation."""
+
         return Task(
             description=description,
             agent=self.agent,
-            expected_output=(
-                "A comprehensive marketing strategy report with business alignment assessment, "
-                "ROI projection, priority scoring, competitive positioning analysis, success metrics, "
-                "and clear Go/No-Go recommendation with strategic justification."
-            )
+            expected_output=task_cfg["expected_output"],
         )
     
     def evaluate_strategy(

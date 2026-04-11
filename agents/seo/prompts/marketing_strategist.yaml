@@ -19,16 +19,8 @@ backstory: >
 tasks:
   strategy_validation:
     description: |
-      Validate and enrich the content strategy from a marketing and business perspective.
-
-      CONTENT STRATEGY:
-      {content_strategy}
-
-      ARTICLE CONTENT:
-      {article_content}
-
-      TECHNICAL SEO REPORT:
-      {technical_seo}
+      Using the content strategy, article, and technical SEO report provided in context,
+      validate and enrich the content from a marketing and business perspective.
 
       BUSINESS CONTEXT:
       - Business goals: {business_goals}

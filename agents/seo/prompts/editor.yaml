@@ -19,13 +19,8 @@ backstory: >
 tasks:
   editing:
     description: |
-      Perform final editorial review and prepare content for publication.
-
-      ARTICLE TO REVIEW:
-      {article_content}
-
-      TECHNICAL SEO REPORT:
-      {technical_seo_report}
+      Using the article and technical SEO report provided in context by the previous agents,
+      perform final editorial review and prepare content for publication.
 
       YOUR EDITORIAL RESPONSIBILITIES:
 

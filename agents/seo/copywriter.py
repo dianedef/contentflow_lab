@@ -60,125 +60,62 @@ class CopywriterAgent:
     
     def create_writing_task(
         self,
-        content_outline: str,
         target_keywords: List[str],
         tone: str = "professional",
         brand_voice: Optional[str] = None,
         target_audience: Optional[str] = None,
         word_count: int = 2000
     ) -> Task:
-        """
-        Create a content writing task.
-        
-        Args:
-            content_outline: Detailed outline from Content Strategist
-            target_keywords: List of keywords to target
-            tone: Desired tone (professional, casual, technical, friendly)
-            brand_voice: Brand voice guidelines
-            target_audience: Target audience description
-            word_count: Target word count
-            
-        Returns:
-            CrewAI Task configured for content writing
-        """
+        """Create a writing task. Content outline is injected via task.context."""
         primary_keyword = target_keywords[0] if target_keywords else "topic"
-        
-        description = f"""
-        Write a comprehensive, SEO-optimized article based on the following outline.
-        
-        PRIMARY KEYWORD: {primary_keyword}
-        TARGET WORD COUNT: {word_count} words
-        TONE: {tone}
-        
-        CONTENT OUTLINE:
-        {content_outline[:2000]}...
-        
-        YOUR WRITING REQUIREMENTS:
-        
-        1. CONTENT QUALITY:
-           - Write engaging, valuable content that serves the reader first
-           - Use storytelling techniques to maintain interest
-           - Include specific examples and actionable advice
-           - Break up text with subheadings every 300-400 words
-           - Use short paragraphs (3-4 sentences max) for readability
-           - Add bullet points and numbered lists where appropriate
-        
-        2. SEO OPTIMIZATION:
-           - Integrate primary keyword "{primary_keyword}" naturally (1-2% density)
-           - Include target keywords: {', '.join(target_keywords[1:5])}
-           - Place primary keyword in:
-             * First 100 words
-             * At least one H2 heading
-             * Conclusion paragraph
-           - Use semantic variations and related terms naturally
-           - Never keyword stuff - prioritize natural language
-        
-        3. STRUCTURE:
-           - Follow the provided outline structure
-           - Create compelling H2 and H3 headings (include keywords where natural)
-           - Write a strong introduction that hooks readers immediately
-           - Add transitional phrases between sections for flow
-           - End with clear conclusion and call-to-action
-        """
-        
+        secondary_keywords = ", ".join(target_keywords[1:5]) if len(target_keywords) > 1 else "None"
+
+        p = load_prompt("seo", "copywriter")
+        task_cfg = p["tasks"]["writing"]
+        description = task_cfg["description"].format(
+            primary_keyword=primary_keyword,
+            word_count=word_count,
+            tone=tone,
+        )
+
+        description += f"""
+
+      YOUR WRITING REQUIREMENTS:
+
+      1. CONTENT QUALITY:
+         - Write engaging, valuable content that serves the reader first
+         - Use storytelling techniques to maintain interest
+         - Include specific examples and actionable advice
+         - Break up text with subheadings every 300-400 words
+         - Use short paragraphs (3-4 sentences max) for readability
+
+      2. SEO OPTIMIZATION:
+         - Integrate primary keyword "{primary_keyword}" naturally (1-2% density)
+         - Include secondary keywords: {secondary_keywords}
+         - Place primary keyword in first 100 words, one H2, and conclusion
+         - Never keyword stuff — prioritize natural language"""
+
         if brand_voice:
-            description += f"""
-        4. BRAND VOICE:
-           - Maintain brand voice: {brand_voice}
-           - Ensure consistency with brand values and messaging
-           - Use appropriate industry terminology
-        """
-        
+            description += f"\n\n      3. BRAND VOICE: {brand_voice}"
+
         if target_audience:
-            description += f"""
-        5. AUDIENCE ADAPTATION:
-           - Target audience: {target_audience}
-           - Write at appropriate knowledge level
-           - Address audience pain points and questions
-           - Use language and examples they relate to
-        """
-        
+            description += f"\n\n      4. TARGET AUDIENCE: {target_audience} — write at their level, address their pain points"
+
         description += """
-        
-        6. ENGAGEMENT ELEMENTS:
-           - Include relevant statistics and data (cite sources)
-           - Add 2-3 expert quotes or industry insights where fitting
-           - Suggest 3-5 image placeholders [IMAGE: description]
-           - Create 1-2 sections with FAQ-style Q&A if appropriate
-           - Add internal linking suggestions [LINK: anchor text → target page]
-        
-        7. METADATA:
-           - Generate compelling title tag (55-60 characters)
-           - Write engaging meta description (155-160 characters)
-           - Suggest 3-5 relevant tags/categories
-        
-        DELIVERABLE FORMAT:
-        Return complete article in markdown format with:
-        - Metadata section (title, description, keywords, tags)
-        - Full article content with proper heading hierarchy
-        - Image placeholders with descriptions
-        - Internal linking suggestions
-        - Call-to-action at the end
-        
-        WRITING STANDARDS:
-        - Write for 8th-9th grade reading level (Flesch-Kincaid)
-        - Use active voice (80%+ of sentences)
-        - Vary sentence length for rhythm
-        - Proof for grammar, spelling, clarity
-        - Make every word count - no fluff
-        
-        Remember: Write for humans first, search engines second. Your goal is to create
-        content so valuable that readers share it and link to it naturally.
-        """
-        
+
+      DELIVERABLE FORMAT:
+      Return the complete article in markdown with metadata section (title tag,
+      meta description, tags), full content, image placeholders, and a CTA.
+
+      Write for humans first, search engines second."""
+
         return Task(
             description=description,
             agent=self.agent,
             expected_output=(
                 f"A complete, SEO-optimized article of approximately {word_count} words in markdown format "
-                "with metadata, proper structure, keyword integration, image placeholders, internal links, "
-                "and compelling copy that engages readers and satisfies search intent."
-            )
+                "with metadata, proper structure, keyword integration, and compelling copy."
+            ),
         )
     
     def write_article(
