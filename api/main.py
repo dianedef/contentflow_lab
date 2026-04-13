@@ -275,11 +275,11 @@ app.add_middleware(
         "http://localhost:3000",      # Next.js dev
         "http://localhost:3001",      # Alternative port
         "http://127.0.0.1:3000",      # Alternative localhost
-        "https://contentflow.com",    # Legacy production domain
+        "https://contentflow.com",    # Future production domain
         "https://www.contentflow.com",
         "https://winflowz.com",       # Current production domain
         "https://www.winflowz.com",
-        "https://app.winflowz.com",
+        "https://contentflow.winflowz.com",
         "https://contentflow_site.vercel.app",
     ],
     allow_origin_regex=(
