@@ -24,11 +24,13 @@ class CurrentUser(BaseModel):
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def require_current_user(
+def get_optional_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> CurrentUser:
-    """Require a valid Clerk bearer token and return the current user."""
-    if credentials is None or credentials.scheme.lower() != "bearer":
+) -> CurrentUser | None:
+    """Return the current Clerk user when a bearer token is present, else None."""
+    if credentials is None:
+        return None
+    if credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing bearer token",
@@ -52,3 +54,16 @@ def require_current_user(
         email=claims.email,
         bearer_token=credentials.credentials,
     )
+
+
+def require_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> CurrentUser:
+    """Require a valid Clerk bearer token and return the current user."""
+    current_user = get_optional_current_user(credentials)
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+        )
+    return current_user

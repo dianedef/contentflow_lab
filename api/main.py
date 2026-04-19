@@ -33,7 +33,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from api.routers import mesh_router, research_router, health_router, projects_router, newsletter_router, deployment_router, images_router, status_router, reels_router, psychology_router, me_router, settings_router, creator_profile_router, personas_router, idea_pool_router, affiliations_router, activity_router, work_domains_router, preview_router, analytics_public_router, analytics_router, auth_web_router, webhook_router
+from api.routers import mesh_router, research_router, health_router, projects_router, newsletter_router, deployment_router, images_router, status_router, reels_router, psychology_router, me_router, settings_router, creator_profile_router, personas_router, idea_pool_router, affiliations_router, activity_router, work_domains_router, preview_router, analytics_public_router, analytics_router, auth_web_router, webhook_router, feedback_router
 from api.routers.scheduler import router as scheduler_router
 from api.routers.templates import router as templates_router
 from api.routers.runs import router as runs_router
@@ -54,10 +54,9 @@ async def lifespan(app: FastAPI):
     Startup:
     - Load agents into memory
     - Initialize connections
-    - Start background sync for status tracking
+    - Ensure Turso-backed tables exist
 
     Shutdown:
-    - Stop background sync
     - Cleanup resources
     - Close connections
     """
@@ -80,19 +79,6 @@ async def lifespan(app: FastAPI):
     # Pre-load agents (optional, for faster first request)
     # Note: Agents will be loaded on-demand when endpoints are called
     print("ℹ️  Agents will be loaded on-demand (lazy loading enabled)")
-
-    # Start background status sync (SQLite → Turso)
-    sync_task = None
-    try:
-        from status.sync import get_sync_service
-        sync_svc = get_sync_service()
-        if sync_svc.configured:
-            sync_task = asyncio.create_task(sync_svc.start_background_sync())
-            print("✅ Status sync started (SQLite → Turso)")
-        else:
-            print("ℹ️  Turso not configured, status sync disabled")
-    except Exception as e:
-        print(f"⚠ Status sync init failed (non-critical): {e}")
 
     # Start background scheduler service
     scheduler_task = None
@@ -131,12 +117,28 @@ async def lifespan(app: FastAPI):
         print(f"⚠ PageView migration failed (non-critical): {e}")
 
     try:
+        from api.services.feedback_store import feedback_store
+        if feedback_store.db_client:
+            await feedback_store.ensure_table()
+            print("✅ FeedbackEntry table ensured")
+    except Exception as e:
+        print(f"⚠ FeedbackEntry migration failed (non-critical): {e}")
+
+    try:
         from agents.seo.config.project_store import project_store
         if project_store.db_client:
             await project_store.ensure_table()
             print("✅ Project table ensured")
     except Exception as e:
         print(f"⚠ Project table migration failed (non-critical): {e}")
+
+    try:
+        from status.service import get_status_service
+
+        get_status_service()
+        print("✅ Status lifecycle tables ensured")
+    except Exception as e:
+        print(f"⚠ Status lifecycle schema init failed (non-critical): {e}")
 
     print("✅ API ready to serve requests")
 
@@ -149,14 +151,6 @@ async def lifespan(app: FastAPI):
             get_scheduler_service().stop()
             scheduler_task.cancel()
             print("✅ Scheduler service stopped")
-        except Exception:
-            pass
-    if sync_task:
-        try:
-            from status.sync import get_sync_service
-            get_sync_service().stop_background_sync()
-            sync_task.cancel()
-            print("✅ Status sync stopped")
         except Exception:
             pass
     print("👋 Shutting down SEO Robots API...")
@@ -356,6 +350,7 @@ app.include_router(preview_router)
 app.include_router(analytics_public_router)
 app.include_router(analytics_router)
 app.include_router(drip_router)
+app.include_router(feedback_router)
 
 
 # ─────────────────────────────────────────────────

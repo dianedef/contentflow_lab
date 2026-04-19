@@ -32,6 +32,7 @@ def _build_client(*, authenticated: bool = True) -> TestClient:
         app.dependency_overrides[require_current_user] = lambda: CurrentUser(
             user_id="user_123",
             email="user@example.com",
+            bearer_token="test-token",
         )
     return TestClient(app)
 

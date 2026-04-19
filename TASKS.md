@@ -25,7 +25,43 @@
 
 | Pri | Task | Status |
 |-----|------|--------|
-| -- | -- | -- |
+| P0 | Feedback Admin v1 — déployer le backend FastAPI feedback sur le serveur | Code implémenté localement, déploiement + validation prod à faire |
+
+### Feedback Admin v1 (2026-04-19)
+
+Contexte:
+- Le code backend FastAPI est implémenté localement dans `contentflow_lab`
+- L'app Flutter appelle maintenant ce backend
+- Il reste surtout la partie déploiement/config serveur
+
+Fait:
+- [x] Ajouter l'auth optionnelle Clerk pour accepter les feedbacks anonymes
+- [x] Ajouter les modèles feedback (`text`, `audio`, `status`)
+- [x] Ajouter le store `FeedbackEntry` sur la base existante Turso/libsql
+- [x] Ajouter les routes `/api/feedback/*`
+- [x] Protéger l'admin par allowlist email côté serveur
+- [x] Ajouter le flux audio avec upload signé et lecture signée via Bunny Storage
+- [x] Ajouter des tests d'intégration ciblés sur le flux feedback
+
+À faire côté serveur:
+- [ ] Push/merge les changements `contentflow_lab` sur la branche de déploiement du backend
+- [ ] Vérifier que les variables déjà utilisées en prod sont bien présentes: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `BUNNY_STORAGE_API_KEY`, `BUNNY_STORAGE_ZONE`, `BUNNY_STORAGE_REGION`
+- [ ] Ajouter les nouvelles variables: `FEEDBACK_ADMIN_EMAILS`, `FEEDBACK_SIGNING_SECRET`
+- [ ] Déployer la nouvelle version du backend sur le serveur
+- [ ] Redémarrer le process FastAPI après déploiement
+- [ ] Vérifier au boot que la table `FeedbackEntry` est bien créée
+
+Validation après déploiement:
+- [ ] Tester un feedback texte anonyme depuis l'app
+- [ ] Tester un feedback texte connecté depuis l'app
+- [ ] Tester un feedback audio depuis l'app
+- [ ] Vérifier qu'un email hors allowlist reçoit bien un `403` sur `/api/feedback/admin`
+- [ ] Vérifier qu'un admin allowlisté voit la liste et peut marquer une entrée comme lue
+
+Note infra:
+- On ne rajoute pas une nouvelle base de données
+- Le flux feedback réutilise la base Turso/libsql déjà en place dans le backend
+- "Configurer Turso" ici veut seulement dire: vérifier que les variables Turso existantes sont bien présentes sur le serveur où tourne FastAPI
 
 ### Audit: Code (2026-04-07)
 
