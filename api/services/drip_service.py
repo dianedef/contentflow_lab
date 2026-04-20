@@ -15,7 +15,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from status.service import StatusService, ContentNotFoundError
 from status.audit import actor_from_agent
-from api.services.frontmatter import read_frontmatter, update_frontmatter as update_fm_file
+from api.services.frontmatter import (
+    apply_frontmatter_patch,
+    has_frontmatter,
+    read_frontmatter,
+    update_frontmatter as update_fm_file,
+)
+from zoneinfo import ZoneInfo
 
 
 class DripPlanNotFoundError(Exception):
@@ -240,9 +246,15 @@ class DripService:
         Returns the number of items imported.
         """
         plan = self.get_plan(plan_id)
+        ssg = plan.get("ssg_config", {}) or {}
         base = Path(directory)
         if not base.is_dir():
             raise ValueError(f"Directory not found: {directory}")
+
+        date_field = ssg.get("frontmatter_date_field", "pubDate")
+        draft_field = ssg.get("frontmatter_draft_field", "draft")
+        robots_field = ssg.get("frontmatter_robots_field", "robots")
+        opt_in_field = ssg.get("frontmatter_opt_in_field", "dripManaged")
 
         count = 0
         for ext in extensions:
@@ -282,6 +294,13 @@ class DripService:
                 if isinstance(tags, str):
                     tags = [tags]
 
+                snapshot_fields = {
+                    str(date_field): {"present": str(date_field) in fm, "value": fm.get(str(date_field))},
+                    str(draft_field): {"present": str(draft_field) in fm, "value": fm.get(str(draft_field))},
+                    str(robots_field): {"present": str(robots_field) in fm, "value": fm.get(str(robots_field))},
+                    str(opt_in_field): {"present": str(opt_in_field) in fm, "value": fm.get(str(opt_in_field))},
+                }
+
                 self.svc.create_content(
                     title=title,
                     content_type="article",
@@ -301,6 +320,11 @@ class DripService:
                         "is_pillar": False,
                         "frontmatter_pub_date": fm.get("pubDate", ""),
                         "abs_path": str(file_path),
+                        "frontmatter_has_block": has_frontmatter(str(file_path)),
+                        "frontmatter_snapshot": {
+                            "captured_at": datetime.utcnow().isoformat(),
+                            "fields": snapshot_fields,
+                        },
                     },
                 )
                 count += 1
@@ -570,6 +594,8 @@ class DripService:
         """
         plan = self.get_plan(plan_id)
         cadence = plan["cadence_config"]
+        cluster = plan.get("cluster_strategy", {}) or {}
+        ssg = plan.get("ssg_config", {}) or {}
         items = self.get_plan_items(plan_id)
 
         if not items:
@@ -580,14 +606,48 @@ class DripService:
         mode = cadence.get("mode", "fixed")
         items_per_day = cadence.get("items_per_day", 3)
         ramp_schedule = cadence.get("ramp_schedule")
+        publish_time = cadence.get("publish_time", "06:00")
+        timezone = cadence.get("timezone", "Europe/Paris")
+        spacing_minutes = int(cadence.get("spacing_minutes", 180) or 0)
+        cluster_gap_days = int(cluster.get("cluster_gap_days", 0) or 0)
+        gating = ssg.get("gating_method", "future_date")
+        enforce_robots = bool(ssg.get("enforce_robots_noindex_until_publish", False))
+        robots_field = ssg.get("frontmatter_robots_field", "robots")
+        robots_noindex_value = ssg.get("robots_noindex_value", "noindex, follow")
+        require_opt_in = bool(ssg.get("require_opt_in", False))
+        opt_in_field = ssg.get("frontmatter_opt_in_field", "dripManaged")
+        opt_in_value = ssg.get("frontmatter_opt_in_value", True)
+
+        try:
+            publish_hour, publish_minute = (int(x) for x in str(publish_time).split(":"))
+        except Exception:
+            publish_hour, publish_minute = 6, 0
+
+        try:
+            tz = ZoneInfo(str(timezone))
+        except Exception:
+            tz = ZoneInfo("UTC")
 
         # Build the schedule
         schedule: List[Dict[str, Any]] = []
         current_date = start_date
         day_offset = 0
         item_idx = 0
+        last_cluster_name: Optional[str] = None
 
         while item_idx < len(items):
+            current_item = items[item_idx]
+            current_cluster_name = (current_item.metadata or {}).get("cluster_name")
+            if (
+                cluster_gap_days > 0
+                and last_cluster_name is not None
+                and current_cluster_name is not None
+                and current_cluster_name != last_cluster_name
+            ):
+                current_date += timedelta(days=cluster_gap_days)
+                day_offset += cluster_gap_days
+                last_cluster_name = current_cluster_name
+
             # Skip non-publish days
             if current_date.weekday() not in publish_days:
                 current_date += timedelta(days=1)
@@ -604,7 +664,7 @@ class DripService:
                         break
 
             # Assign items for today
-            for _ in range(today_count):
+            for slot_index in range(today_count):
                 if item_idx >= len(items):
                     break
 
@@ -621,26 +681,56 @@ class DripService:
                 schedule.append(entry)
 
                 if not dry_run:
-                    scheduled_dt = datetime(
-                        current_date.year, current_date.month, current_date.day,
-                        6, 0, 0,  # Default 06:00
+                    # scheduled_for is persisted in UTC (naive ISO string), but computed from local time.
+                    local_dt = datetime(
+                        current_date.year,
+                        current_date.month,
+                        current_date.day,
+                        publish_hour,
+                        publish_minute,
+                        0,
+                        tzinfo=tz,
                     )
+                    if spacing_minutes > 0 and slot_index > 0:
+                        local_dt = local_dt + timedelta(minutes=spacing_minutes * slot_index)
+                    scheduled_dt = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
                     self.svc.update_content(
                         item.id,
                         scheduled_for=scheduled_dt,
                     )
                     self.svc.transition(item.id, "scheduled", actor_from_agent("drip_scheduler"))
 
+                    # Optional "index-proof" gating: enforce noindex/draft until publish tick flips them.
+                    abs_path = (item.metadata or {}).get("abs_path")
+                    if abs_path and Path(abs_path).exists():
+                        if require_opt_in:
+                            fm = read_frontmatter(str(abs_path))
+                            if fm.get(str(opt_in_field)) != opt_in_value:
+                                item_idx += 1
+                                continue
+                        fm_updates: Dict[str, Any] = {}
+                        if gating in ("draft_flag", "both"):
+                            fm_updates[ssg.get("frontmatter_draft_field", "draft")] = True
+                        if enforce_robots and robots_field:
+                            fm_updates[str(robots_field)] = str(robots_noindex_value)
+                        if fm_updates:
+                            try:
+                                update_fm_file(str(abs_path), fm_updates)
+                            except Exception:
+                                pass
+
                 item_idx += 1
+                last_cluster_name = (item.metadata or {}).get("cluster_name") or last_cluster_name
 
             current_date += timedelta(days=1)
             day_offset += 1
 
         # Update plan with next drip info
         if not dry_run and schedule:
+            first_item = self.svc.get_content(schedule[0]["item_id"])
             self.update_plan(
                 plan_id,
-                next_drip_at=schedule[0]["scheduled_date"],
+                next_drip_at=first_item.scheduled_for.isoformat() if first_item.scheduled_for else None,
             )
 
         return schedule
@@ -679,6 +769,8 @@ class DripService:
         if plan["status"] != "active":
             raise ValueError(f"Cannot pause plan in status '{plan['status']}'")
 
+        self.restore_plan_frontmatter(plan_id)
+
         # Disable the schedule job
         if plan.get("schedule_job_id"):
             try:
@@ -700,7 +792,7 @@ class DripService:
                 self.svc.update_schedule_job(
                     plan["schedule_job_id"],
                     enabled=True,
-                    next_run_at=datetime.utcnow().isoformat(),
+                    next_run_at=plan.get("next_drip_at") or datetime.utcnow().isoformat(),
                 )
             except ContentNotFoundError:
                 pass
@@ -712,6 +804,8 @@ class DripService:
         plan = self.get_plan(plan_id)
         if plan["status"] in ("completed", "cancelled"):
             raise ValueError(f"Plan already in terminal status '{plan['status']}'")
+
+        self.restore_plan_frontmatter(plan_id)
 
         # Disable the schedule job
         if plan.get("schedule_job_id"):
@@ -742,15 +836,20 @@ class DripService:
         gating = ssg.get("gating_method", "future_date")
         date_field = ssg.get("frontmatter_date_field", "pubDate")
         draft_field = ssg.get("frontmatter_draft_field", "draft")
+        enforce_robots = bool(ssg.get("enforce_robots_noindex_until_publish", False))
+        robots_field = ssg.get("frontmatter_robots_field", "robots")
+        robots_index_value = ssg.get("robots_index_value", "index, follow")
+        require_opt_in = bool(ssg.get("require_opt_in", False))
+        opt_in_field = ssg.get("frontmatter_opt_in_field", "dripManaged")
+        opt_in_value = ssg.get("frontmatter_opt_in_value", True)
 
         now = datetime.utcnow()
-        today = now.date().isoformat()
 
         # Find scheduled items that are due
         items = self.get_plan_items(plan_id, status="scheduled")
         due_items = []
         for item in items:
-            if item.scheduled_for and item.scheduled_for.date().isoformat() <= today:
+            if item.scheduled_for and item.scheduled_for <= now:
                 due_items.append(item)
 
         published = []
@@ -763,12 +862,26 @@ class DripService:
                 continue
 
             try:
+                if require_opt_in:
+                    fm = read_frontmatter(str(abs_path))
+                    if fm.get(str(opt_in_field)) != opt_in_value:
+                        errors.append(
+                            {
+                                "item_id": item.id,
+                                "title": item.title,
+                                "error": f"Opt-in required: set {opt_in_field}: {opt_in_value}",
+                            }
+                        )
+                        continue
+
                 # Update the frontmatter based on gating method
                 fm_updates = {}
                 if gating in ("future_date", "both"):
-                    fm_updates[date_field] = today
+                    fm_updates[date_field] = now.date().isoformat()
                 if gating in ("draft_flag", "both"):
                     fm_updates[draft_field] = False
+                if enforce_robots and robots_field:
+                    fm_updates[str(robots_field)] = str(robots_index_value)
 
                 if fm_updates:
                     update_fm_file(abs_path, fm_updates)
@@ -782,7 +895,7 @@ class DripService:
                     "item_id": item.id,
                     "title": item.title,
                     "content_path": item.content_path,
-                    "published_date": today,
+                    "published_date": now.date().isoformat(),
                 })
 
             except Exception as e:
@@ -804,13 +917,9 @@ class DripService:
                     pass
         else:
             # Compute next drip date
-            next_dates = sorted(set(
-                i.scheduled_for.date().isoformat()
-                for i in remaining
-                if i.scheduled_for
-            ))
-            if next_dates:
-                update_fields["next_drip_at"] = next_dates[0]
+            next_times = sorted(i.scheduled_for for i in remaining if i.scheduled_for)
+            if next_times:
+                update_fields["next_drip_at"] = next_times[0].isoformat()
 
         self.update_plan(plan_id, **update_fields)
 
@@ -820,6 +929,120 @@ class DripService:
             "items": published,
             "error_details": errors if errors else None,
             "plan_completed": update_fields.get("status") == "completed",
+        }
+
+    # ─── Safety & Diagnostics ─────────────────────────
+
+    def restore_plan_frontmatter(self, plan_id: str) -> Dict[str, Any]:
+        """Best-effort restore frontmatter fields for items that were pre-gated.
+
+        Used when pausing/cancelling a plan in safe-mode contexts.
+        """
+        try:
+            plan = self.get_plan(plan_id)
+        except Exception:
+            return {"success": False, "error": "Plan not found"}
+
+        ssg = plan.get("ssg_config", {}) or {}
+        date_field = str(ssg.get("frontmatter_date_field", "pubDate"))
+        draft_field = str(ssg.get("frontmatter_draft_field", "draft"))
+        robots_field = str(ssg.get("frontmatter_robots_field", "robots"))
+        keys = {date_field, draft_field, robots_field}
+
+        restored = 0
+        skipped = 0
+        errors = 0
+
+        items = self.get_plan_items(plan_id)
+        for item in items:
+            if str(item.status) not in {"approved", "scheduled"}:
+                skipped += 1
+                continue
+            abs_path = (item.metadata or {}).get("abs_path")
+            if not abs_path or not Path(abs_path).exists():
+                skipped += 1
+                continue
+
+            snapshot = (item.metadata or {}).get("frontmatter_snapshot") or {}
+            fields = snapshot.get("fields") if isinstance(snapshot, dict) else None
+            if not isinstance(fields, dict):
+                skipped += 1
+                continue
+
+            updates: Dict[str, Any] = {}
+            delete_keys: set[str] = set()
+            for key in keys:
+                record = fields.get(key)
+                if not isinstance(record, dict):
+                    continue
+                present = bool(record.get("present"))
+                if not present:
+                    delete_keys.add(key)
+                    continue
+                if "value" in record:
+                    updates[key] = record.get("value")
+
+            if not updates and not delete_keys:
+                skipped += 1
+                continue
+
+            try:
+                apply_frontmatter_patch(str(abs_path), updates=updates, delete_keys=delete_keys)
+                restored += 1
+            except Exception:
+                errors += 1
+
+        return {"success": True, "restored": restored, "skipped": skipped, "errors": errors}
+
+    def preflight_plan(self, plan_id: str) -> Dict[str, Any]:
+        """Run a preflight check to catch index-proof and safe-mode issues."""
+        plan = self.get_plan(plan_id)
+        ssg = plan.get("ssg_config", {}) or {}
+        require_opt_in = bool(ssg.get("require_opt_in", False))
+        opt_in_field = str(ssg.get("frontmatter_opt_in_field", "dripManaged"))
+        opt_in_value = ssg.get("frontmatter_opt_in_value", True)
+
+        items = self.get_plan_items(plan_id)
+        issues: List[Dict[str, Any]] = []
+
+        for item in items:
+            abs_path = (item.metadata or {}).get("abs_path")
+            if not abs_path:
+                issues.append({"item_id": item.id, "severity": "error", "message": "Missing abs_path metadata"})
+                continue
+            if not Path(abs_path).exists():
+                issues.append({"item_id": item.id, "severity": "error", "message": f"File not found: {abs_path}"})
+                continue
+            if not has_frontmatter(str(abs_path)):
+                issues.append({"item_id": item.id, "severity": "error", "message": "No YAML frontmatter block"})
+                continue
+            if require_opt_in:
+                fm = read_frontmatter(str(abs_path))
+                if fm.get(opt_in_field) != opt_in_value:
+                    issues.append(
+                        {
+                            "item_id": item.id,
+                            "severity": "warning",
+                            "message": f"Opt-in missing: set {opt_in_field}: {opt_in_value}",
+                        }
+                    )
+
+        severity_rank = {"error": 2, "warning": 1, "info": 0}
+        worst = "info"
+        for issue in issues:
+            sev = issue.get("severity", "info")
+            if severity_rank.get(sev, 0) > severity_rank.get(worst, 0):
+                worst = sev
+
+        return {
+            "plan_id": plan_id,
+            "status": plan.get("status"),
+            "require_opt_in": require_opt_in,
+            "opt_in_field": opt_in_field,
+            "opt_in_value": opt_in_value,
+            "issues": issues,
+            "issue_count": len(issues),
+            "severity": worst,
         }
 
     # ─── Private helpers ──────────────────────────────

@@ -102,6 +102,8 @@ class SchedulerService:
                 await self._run_short_job(job)
             elif job_type == "social":
                 await self._run_social_job(job)
+            elif job_type == "drip":
+                await self._run_drip_job(job)
             elif job_type == "ingest_newsletters":
                 await self._run_ingest_newsletters(job)
             elif job_type == "ingest_seo":
@@ -121,7 +123,10 @@ class SchedulerService:
             self._persist_dfs_costs(job)
 
             # Mark completed and calculate next run
-            next_run = self._calculate_next_run(job)
+            if job_type == "drip":
+                next_run = self._calculate_next_run_drip(job)
+            else:
+                next_run = self._calculate_next_run(job)
             svc.update_schedule_job(
                 job_id,
                 last_run_status="completed",
@@ -134,7 +139,10 @@ class SchedulerService:
             self._persist_dfs_costs(job)
 
             print(f"❌ Job {job_id} failed: {e}")
-            next_run = self._calculate_next_run(job)
+            if job_type == "drip":
+                next_run = self._calculate_next_run_drip(job)
+            else:
+                next_run = self._calculate_next_run(job)
             svc.update_schedule_job(
                 job_id,
                 last_run_status="failed",
@@ -646,6 +654,83 @@ class SchedulerService:
         except Exception as e:
             raise RuntimeError(f"Social listening failed: {e}") from e
 
+    async def _run_drip_job(self, job: dict) -> None:
+        """Run a drip tick for a progressive publishing plan."""
+        config = job.get("configuration", {}) or {}
+        plan_id = config.get("drip_plan_id")
+        if not plan_id:
+            print(f"⚠ drip job {job.get('id')}: missing configuration.drip_plan_id")
+            return
+
+        from api.services.drip_service import DripService
+        from api.services.rebuild_trigger import trigger_rebuild
+
+        try:
+            from api.services.gsc_client import get_gsc_client
+        except Exception:
+            get_gsc_client = None  # type: ignore
+
+        svc = get_status_service()
+        drip = DripService(svc)
+        plan = drip.get_plan(plan_id)
+
+        result = drip.execute_drip_tick(plan_id)
+        published = int(result.get("published", 0) or 0)
+        if published <= 0:
+            return
+
+        # Trigger SSG rebuild
+        ssg_config = plan.get("ssg_config", {}) or {}
+        try:
+            await trigger_rebuild(ssg_config)
+        except Exception as e:
+            print(f"⚠ drip job {job.get('id')}: rebuild trigger failed: {e}")
+
+        # Submit URLs to GSC if configured
+        gsc_config = plan.get("gsc_config") or {}
+        if gsc_config.get("enabled") and gsc_config.get("submit_urls") and get_gsc_client:
+            try:
+                gsc = get_gsc_client()
+                if gsc.available:
+                    site_url = str(gsc_config.get("site_url") or "").rstrip("/")
+                    urls = []
+                    for item in result.get("items", []) or []:
+                        content_path = str(item.get("content_path") or "").lstrip("/")
+                        if not content_path:
+                            continue
+                        if content_path.endswith(".md") or content_path.endswith(".mdx"):
+                            content_path = content_path.rsplit(".", 1)[0]
+                        urls.append(f"{site_url}/{content_path}")
+                    if site_url and urls:
+                        gsc.submit_urls_batch(
+                            urls,
+                            max_per_day=int(gsc_config.get("max_submissions_per_day", 200) or 200),
+                        )
+            except Exception as e:
+                print(f"⚠ drip job {job.get('id')}: GSC submit failed: {e}")
+
+    def _calculate_next_run_drip(self, job: dict) -> Optional[str]:
+        """Compute next_run_at for drip jobs from plan.next_drip_at (authoritative)."""
+        now = datetime.utcnow()
+        config = job.get("configuration", {}) or {}
+        plan_id = config.get("drip_plan_id")
+        if not plan_id:
+            return (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0).isoformat()
+
+        try:
+            from api.services.drip_service import DripService
+
+            svc = get_status_service()
+            drip = DripService(svc)
+            plan = drip.get_plan(plan_id)
+            next_drip_at = plan.get("next_drip_at")
+            if isinstance(next_drip_at, str) and next_drip_at.strip():
+                return next_drip_at
+        except Exception:
+            pass
+
+        return (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0).isoformat()
+
     async def _auto_transition_scheduled(self, svc) -> None:
         """Auto-transition content whose scheduledFor has passed."""
         now = datetime.utcnow().isoformat()
@@ -654,6 +739,10 @@ class SchedulerService:
         scheduled_items = svc.list_content(status="scheduled", limit=100)
 
         for item in scheduled_items:
+            # Drip content is released via DripService (frontmatter gating + rebuild + optional GSC),
+            # so it should not be auto-transitioned here.
+            if getattr(item, "source_robot", None) == "drip":
+                continue
             if item.scheduled_for and item.scheduled_for.isoformat() <= now:
                 try:
                     svc.transition(
@@ -773,6 +862,10 @@ class SchedulerService:
             next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if next_run <= now:
                 next_run += timedelta(days=1)
+            return next_run.isoformat()
+
+        elif schedule == "hourly":
+            next_run = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
             return next_run.isoformat()
 
         elif schedule == "weekly":

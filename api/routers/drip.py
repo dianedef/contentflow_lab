@@ -335,6 +335,20 @@ async def preview_schedule(
     }
 
 
+@router.get(
+    "/plans/{plan_id}/preflight",
+    summary="Preflight checks (safe mode + index-proof)",
+)
+async def preflight_plan(
+    plan_id: str,
+    current_user: CurrentUser = Depends(require_current_user),
+):
+    """Run diagnostics to catch frontmatter/safe-mode issues before activation."""
+    svc = _get_drip_service()
+    _get_owned_plan_or_404(svc, plan_id, current_user)
+    return svc.preflight_plan(plan_id)
+
+
 # ─── Plan Lifecycle ──────────────────────────────────
 
 

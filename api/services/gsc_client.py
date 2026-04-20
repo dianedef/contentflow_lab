@@ -12,6 +12,8 @@ Requires a Google Service Account with:
 Environment:
     GSC_SERVICE_ACCOUNT_JSON: path to service account JSON file
     GSC_SERVICE_ACCOUNT_DATA: JSON string of service account credentials (alternative)
+    GOOGLE_CREDENTIALS_FILE: legacy alias for GSC_SERVICE_ACCOUNT_JSON
+    GOOGLE_CREDENTIALS_JSON: legacy alias for GSC_SERVICE_ACCOUNT_DATA
 """
 
 import json
@@ -40,12 +42,12 @@ def _get_credentials(scopes: List[str]):
         )
 
     # Try JSON file path first
-    json_path = os.getenv("GSC_SERVICE_ACCOUNT_JSON")
+    json_path = os.getenv("GSC_SERVICE_ACCOUNT_JSON") or os.getenv("GOOGLE_CREDENTIALS_FILE")
     if json_path:
         return service_account.Credentials.from_service_account_file(json_path, scopes=scopes)
 
     # Try inline JSON data
-    json_data = os.getenv("GSC_SERVICE_ACCOUNT_DATA")
+    json_data = os.getenv("GSC_SERVICE_ACCOUNT_DATA") or os.getenv("GOOGLE_CREDENTIALS_JSON")
     if json_data:
         info = json.loads(json_data)
         return service_account.Credentials.from_service_account_info(info, scopes=scopes)

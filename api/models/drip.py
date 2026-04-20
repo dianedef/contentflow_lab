@@ -73,6 +73,11 @@ class CadenceConfig(BaseModel):
     publish_days: List[int] = Field(default=[0, 1, 2, 3, 4], description="0=Mon, 6=Sun")
     publish_time: str = Field(default="06:00", description="Local publish time HH:MM")
     timezone: str = Field(default="Europe/Paris")
+    spacing_minutes: int = Field(
+        default=180,
+        ge=0,
+        description="If items_per_day > 1, space scheduled_for within a day (minutes). 0 disables spacing.",
+    )
     start_date: str = Field(..., description="ISO date YYYY-MM-DD")
 
 
@@ -91,8 +96,24 @@ class SSGConfig(BaseModel):
     rebuild_github_repo: Optional[str] = None
     rebuild_github_branch: str = Field(default="main")
     content_directory: Optional[str] = None
+    require_opt_in: bool = Field(
+        default=False,
+        description="If true, Drip will only mutate frontmatter for files explicitly opted-in (safe mode).",
+    )
+    frontmatter_opt_in_field: str = Field(
+        default="dripManaged",
+        description="Frontmatter boolean field required when require_opt_in=true.",
+    )
+    frontmatter_opt_in_value: bool = Field(default=True)
     frontmatter_date_field: str = Field(default="pubDate")
     frontmatter_draft_field: str = Field(default="draft")
+    enforce_robots_noindex_until_publish: bool = Field(
+        default=False,
+        description="If true, writes a robots frontmatter field to keep unreleased pages noindex, then flips it on publish.",
+    )
+    frontmatter_robots_field: str = Field(default="robots", description="Frontmatter key for robots meta, e.g. 'robots'")
+    robots_noindex_value: str = Field(default="noindex, follow")
+    robots_index_value: str = Field(default="index, follow")
 
 
 class GSCConfig(BaseModel):
