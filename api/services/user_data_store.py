@@ -174,6 +174,28 @@ class UserDataStore:
         )
         return await self.get_user_settings(user_id)
 
+    async def ensure_user_settings_table(self) -> None:
+        """Create UserSettings table if it doesn't exist (idempotent)."""
+        self._ensure_connected()
+        await self.db_client.execute(
+            """
+            CREATE TABLE IF NOT EXISTS UserSettings (
+                id TEXT PRIMARY KEY NOT NULL,
+                userId TEXT NOT NULL UNIQUE,
+                theme TEXT NOT NULL DEFAULT 'system',
+                language TEXT,
+                emailNotifications INTEGER NOT NULL DEFAULT 1,
+                webhookUrl TEXT,
+                apiKeys TEXT,
+                defaultProjectId TEXT,
+                dashboardLayout TEXT,
+                robotSettings TEXT,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """
+        )
+
     async def get_creator_profile(self, user_id: str, project_id: str | None = None) -> dict[str, Any] | None:
         self._ensure_connected()
         query = """

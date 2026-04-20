@@ -94,10 +94,11 @@ async def lifespan(app: FastAPI):
     try:
         from api.services.user_data_store import user_data_store
         if user_data_store.db_client:
+            await user_data_store.ensure_user_settings_table()
             await user_data_store.ensure_affiliate_table()
             await user_data_store.ensure_activity_table()
             await user_data_store.ensure_work_domain_table()
-            print("✅ AffiliateLink + ActivityLog + WorkDomain tables ensured")
+            print("✅ UserSettings + AffiliateLink + ActivityLog + WorkDomain tables ensured")
     except Exception as e:
         print(f"⚠ AffiliateLink migration failed (non-critical): {e}")
 
