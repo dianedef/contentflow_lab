@@ -66,6 +66,10 @@ class Client:
         def _run() -> ResultSet:
             cursor = self._conn.execute(statement, params)
             try:
+                self._conn.commit()
+            except Exception:
+                pass
+            try:
                 rows = cursor.fetchall()
             except Exception:
                 rows = []
