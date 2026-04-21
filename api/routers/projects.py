@@ -22,12 +22,35 @@ from api.models.project import (
     Project,
     OnboardingStatus,
 )
-from agents.seo.services.project_onboarding import project_onboarding_service
-from agents.seo.config.project_store import project_store
-from agents.scheduler.tools.content_scanner import get_content_scanner
-from agents.scheduler.tools.cluster_scheduler import get_cluster_scheduler
+try:
+    from agents.seo.services.project_onboarding import project_onboarding_service
+except Exception as exc:  # pragma: no cover - exercised when optional AI deps are missing
+    class _UnavailableProjectOnboardingService:
+        """Fallback service when onboarding dependencies are not installed."""
+
+        def __init__(self, reason: str) -> None:
+            self._reason = reason
+
+        def _raise_unavailable(self) -> None:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Project onboarding is temporarily unavailable ({self._reason}).",
+            )
+
+        def _unavailable_fn(self, *args, **kwargs):
+            del args, kwargs
+            self._raise_unavailable()
+
+        initiate_onboarding = _unavailable_fn
+        analyze_project = _unavailable_fn
+        confirm_project = _unavailable_fn
+        refresh_analysis = _unavailable_fn
+
+    project_onboarding_service = _UnavailableProjectOnboardingService(str(exc))
+
 from api.dependencies.auth import CurrentUser, require_current_user
-from api.services.user_data_store import user_data_store
+from api.services import user_data_store as user_data_store_module
+from agents.seo.config import project_store as project_store_module
 
 
 router = APIRouter(
@@ -88,7 +111,7 @@ def project_to_response(project: Project, *, default_project_id: str | None = No
 
 async def get_user_default_project_id(user_id: str) -> str | None:
     """Return the last-opened project id stored in user settings."""
-    settings = await user_data_store.get_user_settings(user_id)
+    settings = await user_data_store_module.user_data_store.get_user_settings(user_id)
     default_project_id = settings.get("defaultProjectId")
     return default_project_id if isinstance(default_project_id, str) else None
 
@@ -98,7 +121,7 @@ async def require_owned_project(
     current_user: CurrentUser,
 ) -> Project:
     """Load a project and ensure the current user owns it."""
-    project = await project_store.get_by_id(project_id)
+    project = await project_store_module.project_store.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.user_id != current_user.user_id:
@@ -232,7 +255,7 @@ async def create_project(
     current_user: CurrentUser = Depends(require_current_user),
 ) -> Any:
     """Create a project without running the full onboarding wizard."""
-    project = await project_store.create(
+    project = await project_store_module.project_store.create(
         user_id=current_user.user_id,
         name=request.name or str(request.github_url).rstrip("/").split("/")[-1],
         url=str(request.github_url),
@@ -242,14 +265,14 @@ async def create_project(
     # Direct-create is an explicit user action in the app onboarding flow.
     # Mark onboarding as complete immediately so clients don't treat the project
     # as an unfinished wizard step on next launch.
-    project = await project_store.update_onboarding_status(
+    project = await project_store_module.project_store.update_onboarding_status(
         project.id,
         OnboardingStatus.COMPLETED,
     ) or project
 
     default_project_id = await get_user_default_project_id(current_user.user_id)
     if not default_project_id:
-        await user_data_store.update_user_settings(
+        await user_data_store_module.user_data_store.update_user_settings(
             current_user.user_id,
             {"defaultProjectId": project.id},
         )
@@ -287,7 +310,7 @@ async def analyze_project(
     """Analyze project repository and detect settings."""
     await require_owned_project(project_id, current_user)
 
-    integration = await user_data_store.get_github_integration(current_user.user_id)
+    integration = await user_data_store_module.user_data_store.get_github_integration(current_user.user_id)
     github_token = integration.get("token") if integration else None
 
     try:
@@ -369,7 +392,7 @@ async def list_projects(
     current_user: CurrentUser = Depends(require_current_user),
 ) -> ProjectListResponse:
     """Get all projects for current user."""
-    projects = await project_store.get_by_user(current_user.user_id)
+    projects = await project_store_module.project_store.get_by_user(current_user.user_id)
     default_project_id = await get_user_default_project_id(current_user.user_id)
 
     return ProjectListResponse(
@@ -412,7 +435,7 @@ async def update_project(
 ) -> Any:
     """Update project details."""
     await require_owned_project(project_id, current_user)
-    project = await project_store.update(
+    project = await project_store_module.project_store.update(
         project_id=project_id,
         name=request.name,
         url=str(request.github_url) if request.github_url else None,
@@ -460,7 +483,7 @@ async def delete_project(
     """Delete a project."""
     await require_owned_project(project_id, current_user)
 
-    await project_store.delete(project_id)
+    await project_store_module.project_store.delete(project_id)
     return {"deleted": True, "project_id": project_id}
 
 
@@ -476,11 +499,11 @@ async def set_default_project(
 ) -> Any:
     """Set project as default."""
     await require_owned_project(project_id, current_user)
-    await user_data_store.update_user_settings(
+    await user_data_store_module.user_data_store.update_user_settings(
         current_user.user_id,
         {"defaultProjectId": project_id},
     )
-    project = await project_store.get_by_id(project_id)
+    project = await project_store_module.project_store.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -509,7 +532,7 @@ async def refresh_project(
 ) -> ProjectDetectionResult:
     """Re-analyze project repository."""
     await require_owned_project(project_id, current_user)
-    integration = await user_data_store.get_github_integration(current_user.user_id)
+    integration = await user_data_store_module.user_data_store.get_github_integration(current_user.user_id)
     github_token = integration.get("token") if integration else None
     try:
         return await project_onboarding_service.refresh_analysis(
@@ -545,6 +568,13 @@ async def scan_project_content(
 ) -> dict:
     """Import all markdown content from the project into the scheduling queue."""
     await require_owned_project(project_id, current_user)
+    try:
+        from agents.scheduler.tools.content_scanner import get_content_scanner
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Content scan is temporarily unavailable ({exc}).",
+        )
     scanner = get_content_scanner()
     result = await scanner.scan_project(project_id)
     if not result.get("success"):
@@ -575,6 +605,13 @@ async def propose_schedule(
 ) -> dict:
     """Generate an AI-powered cluster scheduling proposal."""
     await require_owned_project(project_id, current_user)
+    try:
+        from agents.scheduler.tools.cluster_scheduler import get_cluster_scheduler
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Scheduling proposal is temporarily unavailable ({exc}).",
+        )
     scheduler = get_cluster_scheduler()
     result = scheduler.propose(project_id, cadence_per_week=cadence, start_date=start_date)
     if not result.get("success"):
@@ -606,6 +643,13 @@ async def apply_schedule(
 ) -> dict:
     """Apply the validated schedule to all pending articles."""
     await require_owned_project(project_id, current_user)
+    try:
+        from agents.scheduler.tools.cluster_scheduler import get_cluster_scheduler
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Schedule application is temporarily unavailable ({exc}).",
+        )
     scheduler = get_cluster_scheduler()
     result = scheduler.apply_schedule(
         project_id,

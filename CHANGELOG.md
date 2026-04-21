@@ -9,6 +9,12 @@ All notable changes to Content Flows are documented here.
 - Added repository metadata storage (`git_remote_url`) and project onboarding/patch support so selected repositories are persisted and surfaced during Flutter project screens.
 - Added repository folder utilities on content projects to expose `content_directories` and selected source paths for Drip/source setup workflows.
 
+### Changed
+- Made `api/routers/projects.py` imports for optional SEO/scheduler services resilient when AI-only dependencies are unavailable, returning `503` with actionable messages instead of crashing startup.
+
+### Fixed
+- Added a safe test-mode fallback for Zernio publish key lookup to keep publish-related tests stable when external credentials are absent in local/dev environments.
+
 ## [2026-04-20]
 
 ### Added
