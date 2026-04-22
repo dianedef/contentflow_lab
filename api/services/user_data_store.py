@@ -50,6 +50,24 @@ def _mask_api_keys(api_keys: dict[str, Any] | None) -> dict[str, Any] | None:
     return safe
 
 
+def _canonical_persona_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize persona payload keys to snake_case for internal processing."""
+    return {
+        "project_id": payload.get("project_id", payload.get("projectId")),
+        "name": payload.get("name"),
+        "avatar": payload.get("avatar"),
+        "demographics": payload.get("demographics"),
+        "pain_points": payload.get("pain_points", payload.get("painPoints")),
+        "goals": payload.get("goals"),
+        "language": payload.get("language"),
+        "content_preferences": payload.get(
+            "content_preferences",
+            payload.get("contentPreferences"),
+        ),
+        "confidence": payload.get("confidence"),
+    }
+
+
 class UserDataStore:
     """Small repository layer for user-owned app data."""
 
@@ -190,6 +208,49 @@ class UserDataStore:
                 defaultProjectId TEXT,
                 dashboardLayout TEXT,
                 robotSettings TEXT,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """
+        )
+
+    async def ensure_creator_profile_table(self) -> None:
+        """Create CreatorProfile table if it doesn't exist (idempotent)."""
+        self._ensure_connected()
+        await self.db_client.execute(
+            """
+            CREATE TABLE IF NOT EXISTS CreatorProfile (
+                id TEXT PRIMARY KEY NOT NULL,
+                userId TEXT NOT NULL,
+                projectId TEXT,
+                displayName TEXT,
+                voice TEXT,
+                positioning TEXT,
+                values TEXT,
+                currentChapterId TEXT,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL
+            )
+            """
+        )
+
+    async def ensure_customer_persona_table(self) -> None:
+        """Create CustomerPersona table if it doesn't exist (idempotent)."""
+        self._ensure_connected()
+        await self.db_client.execute(
+            """
+            CREATE TABLE IF NOT EXISTS CustomerPersona (
+                id TEXT PRIMARY KEY NOT NULL,
+                userId TEXT NOT NULL,
+                projectId TEXT,
+                name TEXT NOT NULL,
+                avatar TEXT,
+                demographics TEXT,
+                painPoints TEXT,
+                goals TEXT,
+                language TEXT,
+                contentPreferences TEXT,
+                confidence INTEGER NOT NULL DEFAULT 50,
                 createdAt INTEGER NOT NULL,
                 updatedAt INTEGER NOT NULL
             )
@@ -468,6 +529,7 @@ class UserDataStore:
 
     async def create_persona(self, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._ensure_connected()
+        canonical = _canonical_persona_payload(payload)
         now = int(datetime.now().timestamp())
         persona_id = str(uuid.uuid4())
         await self.db_client.execute(
@@ -481,15 +543,15 @@ class UserDataStore:
             [
                 persona_id,
                 user_id,
-                payload.get("projectId"),
-                payload["name"],
-                payload.get("avatar"),
-                _json_dump(payload.get("demographics")),
-                _json_dump(payload.get("painPoints") or []),
-                _json_dump(payload.get("goals") or []),
-                _json_dump(payload.get("language")),
-                _json_dump(payload.get("contentPreferences")),
-                payload.get("confidence") or 50,
+                canonical.get("project_id"),
+                canonical["name"],
+                canonical.get("avatar"),
+                _json_dump(canonical.get("demographics")),
+                _json_dump(canonical.get("pain_points") or []),
+                _json_dump(canonical.get("goals") or []),
+                _json_dump(canonical.get("language")),
+                _json_dump(canonical.get("content_preferences")),
+                canonical.get("confidence") or 50,
                 now,
                 now,
             ],
@@ -504,6 +566,7 @@ class UserDataStore:
         existing = await self.get_persona(user_id, persona_id)
         if not existing:
             return None
+        canonical = _canonical_persona_payload(payload)
         update_fields: list[str] = ["updatedAt = ?"]
         params: list[Any] = [int(datetime.now().timestamp())]
         scalar_fields = {
@@ -512,20 +575,20 @@ class UserDataStore:
             "confidence": "confidence",
         }
         for key, column in scalar_fields.items():
-            if key in payload:
+            if key in canonical and canonical[key] is not None:
                 update_fields.append(f"{column} = ?")
-                params.append(payload[key])
+                params.append(canonical[key])
         json_fields = {
             "demographics": "demographics",
-            "painPoints": "painPoints",
+            "pain_points": "painPoints",
             "goals": "goals",
             "language": "language",
-            "contentPreferences": "contentPreferences",
+            "content_preferences": "contentPreferences",
         }
         for key, column in json_fields.items():
-            if key in payload:
+            if key in canonical and canonical[key] is not None:
                 update_fields.append(f"{column} = ?")
-                params.append(_json_dump(payload[key]))
+                params.append(_json_dump(canonical[key]))
         params.extend([persona_id, user_id])
         await self.db_client.execute(
             f"UPDATE CustomerPersona SET {', '.join(update_fields)} WHERE id = ? AND userId = ?",

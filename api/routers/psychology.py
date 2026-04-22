@@ -7,6 +7,7 @@ agent operations with polling-based status retrieval.
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from api.dependencies.auth import CurrentUser, require_current_user
+from api.services.job_store import job_store
 from status.audit import actor_from_agent
 from api.models.psychology import (
     NarrativeSynthesisRequest,
@@ -21,27 +22,35 @@ from api.models.psychology import (
 )
 import json
 import uuid
-import time
 
 router = APIRouter(prefix="/api/psychology", tags=["Psychology Engine"])
 
-# In-memory task tracking (production would use Redis/DB)
-_tasks: dict[str, dict] = {}
+
+async def _create_job(task_id: str, job_type: str, user_id: str, message: str) -> None:
+    await job_store.upsert(
+        job_id=task_id,
+        job_type=job_type,
+        status="running",
+        progress=5,
+        message=message,
+        user_id=user_id,
+        result=None,
+        error=None,
+    )
 
 
-def _set_task(task_id: str, status: str, result: dict | None = None):
-    _tasks[task_id] = {
-        "status": status,
-        "result": result,
-        "updated_at": time.time(),
-    }
+async def _get_owned_job(task_id: str, user_id: str) -> dict:
+    job = await job_store.get(task_id)
+    if not job or job.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return job
 
 
 # ─────────────────────────────────────────────────
 # Narrative Synthesis (Creator Brain)
 # ─────────────────────────────────────────────────
 
-def _run_synthesis_task(task_id: str, request: NarrativeSynthesisRequest):
+async def _run_synthesis_task(task_id: str, request: NarrativeSynthesisRequest):
     """Background task: run Creator Psychologist agent"""
     try:
         from agents.psychology.creator_psychologist import run_narrative_synthesis
@@ -53,59 +62,97 @@ def _run_synthesis_task(task_id: str, request: NarrativeSynthesisRequest):
             current_positioning=request.current_positioning,
             chapter_title=request.chapter_title,
         )
-        _set_task(task_id, "completed", result)
+        await job_store.update(
+            task_id,
+            status="completed",
+            progress=100,
+            message="Narrative synthesis completed.",
+            result=result,
+            error=None,
+        )
     except Exception as e:
-        _set_task(task_id, "failed", {"error": str(e)})
+        await job_store.update(
+            task_id,
+            status="failed",
+            progress=100,
+            message="Narrative synthesis failed.",
+            error=str(e),
+        )
 
 
 @router.post("/synthesize-narrative")
 async def synthesize_narrative(
     request: NarrativeSynthesisRequest,
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_current_user),
 ):
     """Trigger narrative synthesis from creator entries (async)."""
     task_id = str(uuid.uuid4())
-    _set_task(task_id, "running")
+    await _create_job(
+        task_id,
+        "psychology.synthesize_narrative",
+        current_user.user_id,
+        "Narrative synthesis started.",
+    )
     background_tasks.add_task(_run_synthesis_task, task_id, request)
     return {"task_id": task_id, "status": "running"}
 
 
 @router.get("/synthesis-status/{task_id}")
-async def get_synthesis_status(task_id: str):
+async def get_synthesis_status(
+    task_id: str,
+    current_user: CurrentUser = Depends(require_current_user),
+):
     """Poll for narrative synthesis result."""
-    task = _tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    return await _get_owned_job(task_id, current_user.user_id)
 
 
 # ─────────────────────────────────────────────────
 # Persona Refinement (Customer Brain)
 # ─────────────────────────────────────────────────
 
-def _run_refinement_task(task_id: str, request: PersonaRefinementRequest):
+async def _run_refinement_task(task_id: str, request: PersonaRefinementRequest):
     """Background task: run Audience Analyst agent"""
     try:
         from agents.psychology.audience_analyst import run_persona_refinement
 
         result = run_persona_refinement(
-            persona=request.current_persona,
+            persona=request.current_persona.to_canonical_dict(),
             analytics_data=request.analytics_data,
             content_performance=request.content_performance,
         )
-        _set_task(task_id, "completed", result)
+        await job_store.update(
+            task_id,
+            status="completed",
+            progress=100,
+            message="Persona refinement completed.",
+            result=result,
+            error=None,
+        )
     except Exception as e:
-        _set_task(task_id, "failed", {"error": str(e)})
+        await job_store.update(
+            task_id,
+            status="failed",
+            progress=100,
+            message="Persona refinement failed.",
+            error=str(e),
+        )
 
 
 @router.post("/refine-persona")
 async def refine_persona(
     request: PersonaRefinementRequest,
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_current_user),
 ):
     """Trigger persona refinement using analytics data (async)."""
     task_id = str(uuid.uuid4())
-    _set_task(task_id, "running")
+    await _create_job(
+        task_id,
+        "psychology.refine_persona",
+        current_user.user_id,
+        "Persona refinement started.",
+    )
     background_tasks.add_task(_run_refinement_task, task_id, request)
     return {"task_id": task_id, "status": "running"}
 
@@ -114,7 +161,7 @@ async def refine_persona(
 # Angle Generation (The Bridge)
 # ─────────────────────────────────────────────────
 
-def _run_angle_task(task_id: str, request: AngleGenerationRequest):
+async def _run_angle_task(task_id: str, request: AngleGenerationRequest):
     """Background task: run Angle Strategist agent"""
     try:
         from agents.psychology.angle_strategist import run_angle_generation
@@ -123,36 +170,55 @@ def _run_angle_task(task_id: str, request: AngleGenerationRequest):
             creator_voice=request.creator_voice,
             creator_positioning=request.creator_positioning,
             narrative_summary=request.narrative_summary,
-            persona_data=request.persona_data,
+            persona_data=request.persona_data.to_canonical_dict(),
             content_type=request.content_type.value if request.content_type else None,
             count=request.count,
             seo_signals=request.seo_signals,
             trending_signals=request.trending_signals,
         )
-        _set_task(task_id, "completed", result)
+        await job_store.update(
+            task_id,
+            status="completed",
+            progress=100,
+            message="Angle generation completed.",
+            result=result,
+            error=None,
+        )
     except Exception as e:
-        _set_task(task_id, "failed", {"error": str(e)})
+        await job_store.update(
+            task_id,
+            status="failed",
+            progress=100,
+            message="Angle generation failed.",
+            error=str(e),
+        )
 
 
 @router.post("/generate-angles")
 async def generate_angles(
     request: AngleGenerationRequest,
     background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(require_current_user),
 ):
     """Trigger content angle generation (async)."""
     task_id = str(uuid.uuid4())
-    _set_task(task_id, "running")
+    await _create_job(
+        task_id,
+        "psychology.generate_angles",
+        current_user.user_id,
+        "Angle generation started.",
+    )
     background_tasks.add_task(_run_angle_task, task_id, request)
     return {"task_id": task_id, "status": "running"}
 
 
 @router.get("/angles-status/{task_id}")
-async def get_angles_status(task_id: str):
+async def get_angles_status(
+    task_id: str,
+    current_user: CurrentUser = Depends(require_current_user),
+):
     """Poll for angle generation result."""
-    task = _tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    return await _get_owned_job(task_id, current_user.user_id)
 
 
 # ─────────────────────────────────────────────────
@@ -204,9 +270,10 @@ def _pipeline_actor_for_format(fmt: str):
     return actor_from_agent(actor_id)
 
 
-def _run_pipeline_task(
+async def _run_pipeline_task(
     task_id: str,
     content_record_id: str,
+    user_id: str,
     request: PipelineDispatchRequest,
 ):
     """Background task: dispatch to the appropriate content pipeline."""
@@ -226,7 +293,7 @@ def _run_pipeline_task(
             mem = get_memory_service()
             existing_content_context = mem.load_project_context(
                 query=angle.get("title", ""),
-                user_id=getattr(request, '_user_id', None),
+                user_id=user_id,
                 project_id=request.project_id,
                 limit=10,
             )
@@ -300,7 +367,7 @@ def _run_pipeline_task(
             mem.store_generation_scoped(
                 content_type=fmt,
                 title=request.angle_data.get("title", ""),
-                user_id=getattr(request, '_user_id', None),
+                user_id=user_id,
                 project_id=request.project_id,
                 topics=request.angle_data.get("topics", []),
                 summary=body[:200] if body else "",
@@ -310,14 +377,28 @@ def _run_pipeline_task(
         except Exception:
             pass  # Memory service is optional
 
-        _set_task(task_id, "completed", {
-            "content_record_id": content_record_id,
-            "format": fmt,
-            "preview": body[:500] if body else None,
-        })
+        await job_store.update(
+            task_id,
+            status="completed",
+            progress=100,
+            message="Pipeline content generation completed.",
+            result={
+                "content_record_id": content_record_id,
+                "format": fmt,
+                "preview": body[:500] if body else None,
+            },
+            error=None,
+        )
 
     except Exception as e:
-        _set_task(task_id, "failed", {"error": str(e), "content_record_id": content_record_id})
+        await job_store.update(
+            task_id,
+            status="failed",
+            progress=100,
+            message="Pipeline content generation failed.",
+            error=str(e),
+            result={"content_record_id": content_record_id},
+        )
         # Try to mark the content record as failed
         try:
             from status import get_status_service
@@ -397,8 +478,19 @@ async def dispatch_pipeline(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create content record: {e}")
 
-    _set_task(task_id, "running")
-    background_tasks.add_task(_run_pipeline_task, task_id, content_record_id, request)
+    await _create_job(
+        task_id,
+        "psychology.dispatch_pipeline",
+        current_user.user_id,
+        "Pipeline content generation started.",
+    )
+    background_tasks.add_task(
+        _run_pipeline_task,
+        task_id,
+        content_record_id,
+        current_user.user_id,
+        request,
+    )
 
     return PipelineDispatchResult(
         task_id=task_id,
@@ -409,9 +501,9 @@ async def dispatch_pipeline(
 
 
 @router.get("/pipeline-status/{task_id}")
-async def get_pipeline_status(task_id: str):
+async def get_pipeline_status(
+    task_id: str,
+    current_user: CurrentUser = Depends(require_current_user),
+):
     """Poll for pipeline dispatch result."""
-    task = _tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    return await _get_owned_job(task_id, current_user.user_id)

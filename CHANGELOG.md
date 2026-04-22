@@ -2,6 +2,20 @@
 
 All notable changes to Content Flows are documented here.
 
+## [2026-04-22]
+
+### Added
+- Added user-managed OpenRouter credential support with encrypted storage, validation endpoints, and per-user runtime resolution for AI-backed persona generation.
+- Added persona draft jobs, repo understanding services, and supporting Pydantic models/tests for non-persisted persona suggestions sourced from repositories and public URLs.
+
+### Changed
+- Normalized persona contracts across FastAPI models, routers, and services so snake_case becomes the canonical internal shape while legacy camelCase payloads remain accepted.
+- Extended startup database bootstrapping to ensure creator profile, customer persona, job, and user credential tables are created automatically.
+
+### Fixed
+- Secured psychology job endpoints with authenticated ownership checks and replaced in-memory task tracking with persisted `job_store` records.
+- Documented the new `USER_SECRETS_MASTER_KEY` requirement in environment setup and example configuration.
+
 ## [2026-04-21]
 
 ### Added

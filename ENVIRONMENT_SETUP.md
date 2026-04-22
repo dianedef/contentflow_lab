@@ -71,6 +71,7 @@ doppler run -- uvicorn api.main:app --host 0.0.0.0 --port 8000
 |-----|---------|-------------|
 | `OPENROUTER_API_KEY` | LLM access (recommended) | https://openrouter.ai/keys |
 | `GROQ_API_KEY` | Free LLM fallback | https://console.groq.com |
+| `USER_SECRETS_MASTER_KEY` | Encrypt user-managed provider credentials | Generate a long random secret |
 
 ### SEO & Research Keys
 
@@ -80,6 +81,16 @@ doppler run -- uvicorn api.main:app --host 0.0.0.0 --port 8000
 | `EXA_API_KEY` | Newsletter research | https://exa.ai |
 | `SERP_API_KEY` | SERP analysis | https://serpapi.com |
 | `FIRECRAWL_API_KEY` | Web crawling | https://firecrawl.dev |
+
+### User-Managed Credentials
+
+`USER_SECRETS_MASTER_KEY` is required whenever the API stores user-managed
+credentials such as per-user OpenRouter keys under
+`/api/settings/integrations/openrouter`.
+
+Generate a long random value and keep it stable across restarts for the same
+environment. If it changes, previously stored user credentials can no longer be
+decrypted.
 
 ### Newsletter Robot Keys
 

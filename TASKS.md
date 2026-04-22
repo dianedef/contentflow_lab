@@ -28,6 +28,7 @@
 
 | Pri | Task | Status |
 |-----|------|--------|
+| P1 | Backend persona autofill + repo understanding + user keys | Done |
 | P0 | Feedback Admin v1 — finaliser la config prod backend feedback | Backend live pour le texte, secrets Bunny/admin encore à configurer |
 
 ### Feedback Admin v1 (2026-04-19)

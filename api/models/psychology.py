@@ -1,8 +1,10 @@
 """Pydantic models for the Psychology Engine"""
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from typing import Optional
 from enum import Enum
+
+from api.models.user_data import PersonaCreateRequest
 
 
 # ─────────────────────────────────────────────────
@@ -79,7 +81,11 @@ class PersonaInput(BaseModel):
 class PersonaRefinementRequest(BaseModel):
     """Request to refine a persona using analytics or behavioral data"""
     persona_id: str = Field(..., description="Persona ID to refine")
-    current_persona: dict = Field(..., description="Current persona data")
+    current_persona: PersonaCreateRequest = Field(
+        ...,
+        validation_alias=AliasChoices("current_persona", "persona"),
+        description="Current persona data",
+    )
     analytics_data: Optional[dict] = Field(None, description="GA or similar analytics data")
     content_performance: Optional[list[dict]] = Field(None, description="Performance data for content targeting this persona")
 
@@ -109,7 +115,7 @@ class AngleGenerationRequest(BaseModel):
     creator_voice: dict = Field(..., description="Creator's voice profile")
     creator_positioning: dict = Field(..., description="Creator's positioning")
     narrative_summary: Optional[str] = Field(None, description="Current narrative summary")
-    persona_data: dict = Field(..., description="Customer persona data")
+    persona_data: PersonaCreateRequest = Field(..., description="Customer persona data")
     content_type: Optional[ContentType] = Field(None, description="Limit to specific content type")
     count: int = Field(default=5, ge=1, le=10, description="Number of angles to generate")
     seo_signals: Optional[list[dict]] = Field(None, description="SEO keyword data (volume, difficulty, intent)")
