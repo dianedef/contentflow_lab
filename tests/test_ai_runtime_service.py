@@ -80,6 +80,43 @@ async def test_preflight_missing_required_byok_provider_raises_runtime_error(mon
 
 
 @pytest.mark.asyncio
+async def test_preflight_byok_decryption_failure_is_operator_runtime_error(monkeypatch):
+    svc = AIRuntimeService()
+    monkeypatch.setattr(svc, "get_effective_mode", AsyncMock(return_value="byok"))
+    monkeypatch.setattr(
+        user_key_store,
+        "get_credential_status",
+        AsyncMock(
+            return_value={
+                "provider": "openrouter",
+                "configured": True,
+                "validation_status": "valid",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        user_key_store,
+        "get_secret",
+        AsyncMock(side_effect=RuntimeError("USER_SECRETS_MASTER_KEY is required")),
+    )
+
+    with pytest.raises(AIRuntimeServiceError) as exc:
+        await svc.preflight_providers(
+            user_id="user-1",
+            route="personas.draft",
+            required_providers=["openrouter"],
+        )
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail["code"] == "ai_runtime_operator_provider_unavailable"
+    assert exc.value.detail["provider"] == "openrouter"
+    assert exc.value.detail["settingsPath"] is None
+    assert exc.value.detail["details"] == {
+        "reason": "user_credential_decryption_unavailable"
+    }
+
+
+@pytest.mark.asyncio
 async def test_upsert_provider_secret_uses_persisted_payload_without_extra_lookup(monkeypatch):
     svc = AIRuntimeService()
     upsert = AsyncMock(

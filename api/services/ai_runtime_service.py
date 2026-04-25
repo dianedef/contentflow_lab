@@ -220,8 +220,23 @@ class AIRuntimeService:
 
         try:
             secret = await user_key_store.get_secret(user_id, provider=provider)
-        except RuntimeError:
-            secret = None
+        except RuntimeError as exc:
+            if required:
+                raise self._error(
+                    status_code=503,
+                    code="ai_runtime_operator_provider_unavailable",
+                    message=(
+                        f"{provider} credential exists, but the server could not "
+                        "decrypt user-managed provider credentials."
+                    ),
+                    route=route,
+                    retryable=True,
+                    mode=mode,
+                    provider=provider,
+                    settings_path=None,
+                    details={"reason": "user_credential_decryption_unavailable"},
+                ) from exc
+            return None
         if secret:
             return secret
         if required:
