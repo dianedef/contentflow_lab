@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 
 from api.models.project import OnboardProjectRequest, OnboardingStatus, Project, ProjectSettings
 
@@ -189,3 +190,166 @@ async def test_create_project_accepts_non_github_website_url():
         project_type="website",
         description=None,
     )
+
+
+@pytest.mark.asyncio
+async def test_create_project_treats_non_github_host_with_github_query_as_website():
+    source_url = "https://example.com/landing?next=https://github.com/acme/project-3"
+    explicit_name = "Website source"
+    project = Project(
+        id="project-4",
+        user_id="user-1",
+        name=explicit_name,
+        url=source_url,
+        type="website",
+        settings=ProjectSettings(onboarding_status=OnboardingStatus.PENDING),
+        created_at=datetime.now(),
+    )
+    completed_project = project.model_copy(
+        update={
+            "settings": project.settings.model_copy(update={"onboarding_status": OnboardingStatus.COMPLETED}),
+        },
+    )
+
+    project_store_stub = SimpleNamespace(
+        create=AsyncMock(return_value=project),
+        update_onboarding_status=AsyncMock(return_value=completed_project),
+        get_by_id=AsyncMock(return_value=completed_project),
+    )
+    user_data_store_stub = SimpleNamespace(
+        get_user_settings=AsyncMock(return_value={}),
+        update_user_settings=AsyncMock(),
+    )
+
+    router = _load_projects_router_module(
+        project_store_stub=project_store_stub,
+        user_data_store_stub=user_data_store_stub,
+    )
+
+    user = SimpleNamespace(user_id="user-1", email="user@example.com")
+    request = OnboardProjectRequest(name=explicit_name, source_url=source_url)
+
+    response = await router.create_project(request=request, current_user=user)
+
+    assert response.type == "website"
+    project_store_stub.create.assert_awaited_once_with(
+        user_id="user-1",
+        name=explicit_name,
+        url=source_url,
+        project_type="website",
+        description=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_archive_project_returns_403_for_non_owner():
+    project = Project(
+        id="project-5",
+        user_id="user-2",
+        name="Project 5",
+        url="https://example.com",
+        type="website",
+        settings=ProjectSettings(onboarding_status=OnboardingStatus.COMPLETED),
+        created_at=datetime.now(),
+    )
+
+    project_store_stub = SimpleNamespace(
+        get_by_id=AsyncMock(return_value=project),
+        archive=AsyncMock(),
+        get_by_user=AsyncMock(return_value=[]),
+    )
+    user_data_store_stub = SimpleNamespace(
+        get_user_settings=AsyncMock(return_value={}),
+        update_user_settings=AsyncMock(),
+    )
+    router = _load_projects_router_module(
+        project_store_stub=project_store_stub,
+        user_data_store_stub=user_data_store_stub,
+    )
+
+    user = SimpleNamespace(user_id="user-1", email="user@example.com")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await router.archive_project(project_id="project-5", current_user=user)
+
+    assert exc_info.value.status_code == 403
+    project_store_stub.archive.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_archive_project_clears_selected_default_when_archiving_selected_project():
+    project = Project(
+        id="project-6",
+        user_id="user-1",
+        name="Project 6",
+        url="https://example.com",
+        type="website",
+        settings=ProjectSettings(onboarding_status=OnboardingStatus.COMPLETED),
+        created_at=datetime.now(),
+    )
+    archived_project = project.model_copy(update={"archived_at": datetime.now()})
+
+    project_store_stub = SimpleNamespace(
+        get_by_id=AsyncMock(return_value=project),
+        archive=AsyncMock(return_value=archived_project),
+        get_by_user=AsyncMock(return_value=[archived_project]),
+    )
+    user_data_store_stub = SimpleNamespace(
+        get_user_settings=AsyncMock(
+            return_value={"defaultProjectId": "project-6", "projectSelectionMode": "selected"}
+        ),
+        update_user_settings=AsyncMock(),
+    )
+    router = _load_projects_router_module(
+        project_store_stub=project_store_stub,
+        user_data_store_stub=user_data_store_stub,
+    )
+
+    user = SimpleNamespace(user_id="user-1", email="user@example.com")
+    response = await router.archive_project(project_id="project-6", current_user=user)
+
+    assert response.id == "project-6"
+    assert response.is_archived is True
+    assert response.is_default is False
+    user_data_store_stub.update_user_settings.assert_awaited_once_with(
+        "user-1",
+        {"defaultProjectId": None, "projectSelectionMode": "none"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_unarchive_project_restores_project_and_keeps_selected_default():
+    archived_project = Project(
+        id="project-7",
+        user_id="user-1",
+        name="Project 7",
+        url="https://example.com",
+        type="website",
+        archived_at=datetime.now(),
+        settings=ProjectSettings(onboarding_status=OnboardingStatus.COMPLETED),
+        created_at=datetime.now(),
+    )
+    restored_project = archived_project.model_copy(update={"archived_at": None})
+
+    project_store_stub = SimpleNamespace(
+        get_by_id=AsyncMock(return_value=archived_project),
+        unarchive=AsyncMock(return_value=restored_project),
+        get_by_user=AsyncMock(return_value=[restored_project]),
+    )
+    user_data_store_stub = SimpleNamespace(
+        get_user_settings=AsyncMock(
+            return_value={"defaultProjectId": "project-7", "projectSelectionMode": "selected"}
+        ),
+        update_user_settings=AsyncMock(),
+    )
+    router = _load_projects_router_module(
+        project_store_stub=project_store_stub,
+        user_data_store_stub=user_data_store_stub,
+    )
+
+    user = SimpleNamespace(user_id="user-1", email="user@example.com")
+    response = await router.unarchive_project(project_id="project-7", current_user=user)
+
+    assert response.id == "project-7"
+    assert response.is_archived is False
+    assert response.is_default is True

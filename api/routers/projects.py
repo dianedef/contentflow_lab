@@ -6,6 +6,7 @@ Handles project onboarding workflow and CRUD operations.
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pathlib import Path
 from typing import Any, List, Optional
+from urllib.parse import urlparse
 
 from api.models.project import (
     OnboardProjectRequest,
@@ -87,8 +88,9 @@ def _resolve_project_type(source_url: str) -> str:
     normalized = source_url.strip()
     if not normalized:
         return "manual"
-    host = normalized.lower()
-    if "://github.com/" in host or "://www.github.com/" in host:
+    parsed = urlparse(normalized)
+    host = parsed.netloc.lower()
+    if host in {"github.com", "www.github.com"}:
         return "github"
     return "website"
 

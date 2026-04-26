@@ -2,6 +2,17 @@
 
 All notable changes to Content Flows are documented here.
 
+## [2026-04-25]
+
+### Added
+- Added project selection mode persistence (`auto` / `selected` / `none`) in user settings and bootstrap/default-project resolution paths.
+- Added explicit project archive lifecycle endpoints (`POST /api/projects/{id}/archive`, `POST /api/projects/{id}/unarchive`) and project response flags for archived/deleted state.
+
+### Changed
+- Canonicalized project source payloads to `source_url` while keeping legacy `github_url` compatibility in request parsing.
+- Expanded project creation/onboarding flow to accept manual projects and generic website URLs (not GitHub-only), with project type inferred from source.
+- Updated project deletion/default-selection behavior to clear selected project state via `projectSelectionMode=none` when the selected project is archived/deleted.
+
 ## [2026-04-22]
 
 ### Added
