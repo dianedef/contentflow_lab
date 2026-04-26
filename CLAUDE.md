@@ -51,6 +51,8 @@ open http://localhost:8000/redoc
 - Production DB is **Turso (SQLite/libSQL)**.
 - If you introduce a new table/column/index that the API code relies on, ship the corresponding migration/ensure step in the same change.
 - Failure mode is misleading: a missing table (e.g. `UserSettings`) can make onboarding/project selection appear broken and can even trigger upstream 502s.
+- **Mandatory before every commit/push**: explicitly decide and state whether a Turso migration is required (`yes/no`), with a short reason.
+- If the answer is `yes`, include the migration/ensure changes in the same commit/push. If `no`, record why no migration is needed.
 
 ## Related Projects
 
