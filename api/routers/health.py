@@ -9,10 +9,23 @@ import subprocess
 
 router = APIRouter(tags=["Health & Monitoring"])
 
+def _normalize_git_sha(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return normalized[:7]
+
+
 def _detect_git_sha() -> str | None:
-    sha = os.getenv("BACKEND_GIT_SHA") or os.getenv("GIT_SHA")
+    sha = (
+        os.getenv("BACKEND_GIT_SHA")
+        or os.getenv("RENDER_GIT_COMMIT")
+        or os.getenv("GIT_SHA")
+    )
     if sha:
-        return sha.strip() or None
+        return _normalize_git_sha(sha)
 
     try:
         repo_root = Path(__file__).resolve().parents[2]
@@ -26,7 +39,7 @@ def _detect_git_sha() -> str | None:
         )
         if result.returncode != 0:
             return None
-        return result.stdout.strip() or None
+        return _normalize_git_sha(result.stdout)
     except Exception:
         return None
 
